@@ -424,6 +424,14 @@ elif page == "Practice Quiz":
         st.markdown("---")
         st.markdown(f"<div class='hero'><div class='pill'>QUIZ RESULT</div><h2>Your score: {score}/10</h2><p>{'Excellent work! 🌟' if score >= 9 else 'Great effort! Keep practicing. 💪' if score >= 7 else 'Good start. Review the explanations and try again. 📘'}</p></div>", unsafe_allow_html=True)
         st.progress(score / 10)
+        if score < 5:
+            st.warning("📘 Recommendation: Revise the basics of this topic and try again.")
+
+        elif score < 8:
+            st.info("📝 Recommendation: Practice more questions on this topic.")
+
+        else:
+            st.success("🚀 Recommendation: You are ready to learn the next topic!")
         for i, (question, options, correct, explanation) in enumerate(questions):
             selected = chosen[i] if i < len(chosen) else None
             if selected == correct:
