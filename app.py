@@ -371,7 +371,7 @@ elif page == "Study Planner":
             with col2:
                 st.checkbox("Complete", key=k)
             st.markdown("</div>", unsafe_allow_html=True)
-    completed_days = sum(1 for i in range(1, 8) if st.session_state.planner_checks.get(planner_key(i, "done"), False))
+    completed_days = sum(1 for i in range(1, 8) if st.session_state.get(planner_key(i, "done"), False))
     st.progress(completed_days / 7)
     st.caption(f"Weekly plan progress: {completed_days}/7 days.")
     # Keep checkbox state in a compact session mapping
