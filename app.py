@@ -19,6 +19,14 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+if (
+    "access_token" in st.session_state
+    and "refresh_token" in st.session_state
+):
+    supabase.auth.set_session(
+        st.session_state.access_token,
+        st.session_state.refresh_token
+    )
 
 # -------------------- Theme --------------------
 st.markdown("""
@@ -253,6 +261,8 @@ if st.session_state.user is None:
                     "password": password
                 })
                 st.session_state.user = response.user
+                st.session_state.access_token = response.session.access_token
+                st.session_state.refresh_token = response.session.refresh_token
                 st.success("Login successful!")
                 st.rerun()
             except Exception as e:
