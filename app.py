@@ -217,6 +217,48 @@ defaults = {
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
+        # Login and Signup
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if st.session_state.user is None:
+    st.title("🧠 LearnWise AI")
+    st.subheader("Login or Create an Account")
+
+    auth_option = st.radio(
+        "Choose an option",
+        ["Login", "Sign Up"],
+        horizontal=True
+    )
+
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+
+    if auth_option == "Sign Up":
+        if st.button("Create Account"):
+            try:
+                response = supabase.auth.sign_up({
+                    "email": email,
+                    "password": password
+                })
+                st.success("Account created! Please check your email.")
+            except Exception as e:
+                st.error(str(e))
+
+    else:
+        if st.button("Login"):
+            try:
+                response = supabase.auth.sign_in_with_password({
+                    "email": email,
+                    "password": password
+                })
+                st.session_state.user = response.user
+                st.success("Login successful!")
+                st.rerun()
+            except Exception as e:
+                st.error("Login failed. Check your email and password.")
+
+    st.stop()
 
 # -------------------- Sidebar --------------------
 with st.sidebar:
@@ -236,6 +278,12 @@ with st.sidebar:
     st.session_state.level = st.selectbox("Current level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(st.session_state.level))
     st.session_state.goal = st.selectbox("Learning goal", ["Theory", "Coding Practice", "Projects"], index=["Theory", "Coding Practice", "Projects"].index(st.session_state.goal))
     st.markdown("<div class='small-muted'>Prototype • Session-based progress</div>", unsafe_allow_html=True)
+    st.markdown("---")
+
+    if st.button("Logout"):
+        supabase.auth.sign_out()
+        st.session_state.user = None
+        st.rerun()
 
 name = st.session_state.student_name.strip() or "Learner"
 subject, level, goal = st.session_state.subject, st.session_state.level, st.session_state.goal
@@ -387,6 +435,24 @@ elif page == "Learning Recommendations":
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
     daily_topics = TOPICS[subject][level]
+    # Load saved weekly progress once
+    if "planner_loaded" not in st.session_state:
+        user_id = st.session_state.user.id
+
+        saved_progress = (
+            supabase.table("weekly_progress")
+            .select("completed_days")
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        saved_days = saved_progress.data[0]["completed_days"] if saved_progress.data else []
+
+        for day_num in range(1, 8):
+            day_key = planner_key(day_num, "done")
+            st.session_state[day_key] = day_num in saved_days
+
+        st.session_state.planner_loaded = True
     for day_num in range(1, 8):
         topic = daily_topics[(day_num - 1) % len(daily_topics)]
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -397,9 +463,35 @@ elif page == "Study Planner":
         with col2:
             st.checkbox("Complete", key=planner_key(day_num, "done"))
         st.markdown("</div>", unsafe_allow_html=True)
+        
+
     completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
     st.progress(completed_days / 7)
     st.caption(f"Weekly plan progress: {completed_days}/7 days.")
+    checked_days = [
+        day_num
+        for day_num in range(1, 8)
+        if st.session_state.get(planner_key(day_num, "done"), False)
+    ]
+
+    user_id = st.session_state.user.id
+
+    saved_progress = (
+        supabase.table("weekly_progress")
+        .select("user_id")
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    if saved_progress.data:
+        supabase.table("weekly_progress").update({
+            "completed_days": checked_days
+        }).eq("user_id", user_id).execute()
+    else:
+        supabase.table("weekly_progress").insert({
+            "user_id": user_id,
+            "completed_days": checked_days
+        }).execute()
     for day_num in range(1, 8):
         st.session_state.planner_checks[planner_key(day_num, "done")] = st.session_state.get(planner_key(day_num, "done"), False)
 
