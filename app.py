@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
-
+from supabase import create_client
 # ------------------------------------------------------------
 # LearnWise AI - Personalized Learning Recommendation System
 # Existing features preserved + revision and progress features
@@ -14,6 +14,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# Supabase connection
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # -------------------- Theme --------------------
 st.markdown("""
