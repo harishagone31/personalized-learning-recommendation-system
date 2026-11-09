@@ -1,9 +1,33 @@
 import os
+import json
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
 from supabase import create_client
+from urllib.parse import quote_plus
+from google import genai
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+gemini_client = (
+    genai.Client(api_key=GEMINI_API_KEY)
+    if GEMINI_API_KEY
+    else None
+)
+def generate_ai_content(prompt):
+    if gemini_client is None:
+        return None
+
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        return response.text
+
+    except Exception as e:
+        st.error(f"Gemini AI error: {e}")
+        return None
 
 # ------------------------------------------------------------
 # LearnWise AI - Personalized Learning Recommendation System
@@ -386,6 +410,96 @@ FLASHCARDS = {
         ("What is generative AI?", "AI that creates new content."),
     ],
 }
+# -------------------- Dynamic AI Learning Content --------------------
+def get_ai_learning_content(subject, level, goal):
+    cache_key = f"{subject}_{level}_{goal}"
+
+    if "ai_content_cache" not in st.session_state:
+        st.session_state.ai_content_cache = {}
+
+    if cache_key in st.session_state.ai_content_cache:
+        return st.session_state.ai_content_cache[cache_key]
+
+    prompt = f"""
+    Create learning content for:
+    Subject: {subject}
+    Level: {level}
+    Goal: {goal}
+
+    Return ONLY valid JSON with this structure:
+    {{
+        "topics": ["topic 1", "topic 2", "topic 3", "topic 4", "topic 5"],
+        "quiz": [
+            {{
+                "question": "Question",
+                "options": ["A", "B", "C", "D"],
+                "answer": 0,
+                "explanation": "Explanation"
+            }}
+        ],
+        "flashcards": [
+            {{"question": "Question", "answer": "Answer"}}
+        ]
+    }}
+
+    Create 10 quiz questions and 10 flashcards.
+    Make all content accurate and suitable for the selected level and goal.
+    """
+
+    response_text = generate_ai_content(prompt)
+
+    if not response_text:
+        return None
+
+    try:
+        cleaned_text = response_text.replace("```json", "").replace("```", "").strip()
+        content = json.loads(cleaned_text)
+
+        if not isinstance(content, dict):
+            return None
+
+        if not all(key in content for key in ["topics", "quiz", "flashcards"]):
+            return None
+
+        if (
+            not isinstance(content["topics"], list)
+            or not content["topics"]
+            or not isinstance(content["quiz"], list)
+            or len(content["quiz"]) != 10
+            or not isinstance(content["flashcards"], list)
+            or len(content["flashcards"]) != 10
+        ):
+            return None
+
+        for question in content["quiz"]:
+            if (
+                not isinstance(question, dict)
+                or not isinstance(question.get("question"), str)
+                or not isinstance(question.get("explanation"), str)
+                or not isinstance(question.get("options"), list)
+                or len(question["options"]) != 4
+                or not isinstance(question.get("answer"), int)
+                or question["answer"] not in range(4)
+            ):
+                return None
+
+        for card in content["flashcards"]:
+            if (
+                not isinstance(card, dict)
+                or not isinstance(card.get("question"), str)
+                or not isinstance(card.get("answer"), str)
+                or not card["question"].strip()
+                or not card["answer"].strip()
+            ):
+                return None
+
+        st.session_state.ai_content_cache[cache_key] = content
+        return content
+
+    except (json.JSONDecodeError, TypeError, ValueError):
+        st.warning("AI content could not be prepared. Please try again.")
+        return None
+
 # -------------------- Session state --------------------
 defaults = {
     "student_name": "Learner", "subject": "Python", "level": "Beginner",
@@ -422,7 +536,6 @@ if st.session_state.user is not None:
 
     except Exception as e:
         st.error(f"Could not load saved progress: {e}")
-
 # -------------------- Sidebar --------------------
 with st.sidebar:
     if st.button("Logout"):
@@ -435,22 +548,74 @@ with st.sidebar:
     st.markdown("## 🧠 LearnWise AI")
     st.caption("Your personalized learning companion")
     st.markdown("---")
+
     page = st.radio(
         "NAVIGATION",
-        ["Dashboard", "Learning Recommendations", "Study Planner", "Learning Resources",
-         "Practice Quiz", "Flashcards", "Study Assistant", "My Progress"],
+        ["Dashboard", "Learning Recommendations", "Study Planner",
+         "Learning Resources", "Practice Quiz", "Flashcards",
+         "Study Assistant", "My Progress"],
         label_visibility="visible",
     )
+
     st.markdown("---")
     st.markdown("### 👤 Student profile")
-    st.session_state.student_name = st.text_input("Your name", st.session_state.student_name)
-    st.session_state.subject = st.selectbox("Learning subject", list(TOPICS.keys()), index=list(TOPICS.keys()).index(st.session_state.subject))
-    st.session_state.level = st.selectbox("Current level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(st.session_state.level))
-    st.session_state.goal = st.selectbox("Learning goal", ["Theory", "Coding Practice", "Projects"], index=["Theory", "Coding Practice", "Projects"].index(st.session_state.goal))
-    st.markdown("<div class='small-muted'>Prototype • Session-based progress</div>", unsafe_allow_html=True)
+    st.session_state.student_name = st.text_input(
+        "Your name", st.session_state.student_name
+    )
+
+subject_options = list(TOPICS.keys()) + ["Other (Enter your own)"]
+
+    if "subject_selector" not in st.session_state:
+        st.session_state.subject_selector = (
+            st.session_state.subject
+            if st.session_state.subject in TOPICS
+            else "Other (Enter your own)"
+        )
+
+    selected_subject = st.selectbox(
+        "Learning subject",
+        subject_options,
+        key="subject_selector"
+    )
+
+    if selected_subject == "Other (Enter your own)":
+        custom_subject = st.text_input(
+            "Enter your subject",
+            key="custom_subject_input"
+        )
+
+        if custom_subject.strip():
+            st.session_state.subject = custom_subject.strip()
+    else:
+        st.session_state.subject = selected_subject
+
+    st.session_state.level = st.selectbox(
+        "Current level",
+        ["Beginner", "Intermediate", "Advanced"],
+        index=["Beginner", "Intermediate", "Advanced"].index(
+            st.session_state.level
+        )
+    )
+
+    st.session_state.goal = st.selectbox(
+        "Learning goal",
+        ["Theory", "Coding Practice", "Projects"],
+        index=["Theory", "Coding Practice", "Projects"].index(
+            st.session_state.goal
+        )
+    )
+
+    st.markdown(
+        "<div class='small-muted'>Prototype • Session-based progress</div>",
+        unsafe_allow_html=True
+    )
 
 name = st.session_state.student_name.strip() or "Learner"
-subject, level, goal = st.session_state.subject, st.session_state.level, st.session_state.goal
+subject, level, goal = (
+    st.session_state.subject,
+    st.session_state.level,
+    st.session_state.goal
+)
 
 # -------------------- Helpers --------------------
 def heading(title, subtitle=None):
@@ -462,8 +627,19 @@ def topic_key(topic):
     return f"{subject}::{level}::{topic}"
 
 def show_topic_progress():
-    topics = TOPICS[subject][level]
-    done = sum(1 for topic in topics if topic_key(topic) in st.session_state.completed_topics)
+    content = get_ai_learning_content(subject, level, goal)
+
+    topics = (
+        content["topics"]
+        if content
+        else TOPICS.get(subject, {}).get(level, [])
+    )
+
+    done = sum(
+        1 for topic in topics
+        if topic_key(topic) in st.session_state.completed_topics
+    )
+
     return done, len(topics)
 
 def planner_key(day_number, task):
@@ -482,16 +658,27 @@ def get_streak():
     return streak
 
 def next_recommendation():
-    current_topics = TOPICS[subject][level]
+    content = get_ai_learning_content(subject, level, goal)
+
+    current_topics = (
+        content["topics"]
+        if content
+        else TOPICS.get(subject, {}).get(level, [])
+    )
+
     for topic in current_topics:
         if topic_key(topic) not in st.session_state.completed_topics:
             attempt_key = f"{subject}::{level}::{topic}"
             attempts = st.session_state.topic_attempts.get(attempt_key, [])
+
             if attempts and attempts[-1] < 5:
                 return topic, "Revise this topic first: your latest check-in was below 50%."
+
             if attempts and attempts[-1] >= 8:
                 return topic, "Your check-in is strong. Mark this topic complete and continue."
+
             return topic, "Start here, then complete a short practice session."
+
     return "Review your completed topics", "You have completed this level's roadmap. Try a challenge or review."
 
 # -------------------- Dashboard --------------------
@@ -534,7 +721,17 @@ if page == "Dashboard":
     q1.markdown("<div class='glass-card'><h3>📖 Learn</h3><p>Explore your personalized roadmap.</p></div>", unsafe_allow_html=True)
     q2.markdown("<div class='glass-card'><h3>📝 Practice</h3><p>Take a quiz and review explanations.</p></div>", unsafe_allow_html=True)
     q3.markdown("<div class='glass-card'><h3>📊 Track</h3><p>Review scores and study consistency.</p></div>", unsafe_allow_html=True)
-    topics = TOPICS[subject][level]
+    content = get_ai_learning_content(subject, level, goal)
+
+topics = (
+    content["topics"]
+    if content
+    else TOPICS.get(subject, {}).get(level, [])
+)
+
+if not topics:
+    st.warning("No learning topics available. Please try again.")
+    st.stop()
 
     for index, topic in enumerate(topics, start=1):
         is_done = topic_key(topic) in st.session_state.completed_topics
@@ -589,15 +786,32 @@ if page == "Dashboard":
             st.info(f"You scored {score}/10 in **{assessment['topic']}**. Review key points and practice a little more.")
         if level == "Beginner":
             st.markdown("**Beginner-friendly resources:**")
-            for resource_title, resource_url in RESOURCES[subject][:2]:
-                st.markdown(f"- [{resource_title}]({resource_url})")
-                st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
+        resource_items = RESOURCES.get(subject, [])
+
+if resource_items:
+    for resource_title, resource_url in resource_items[:2]:
+        st.markdown(f"- [{resource_title}]({resource_url})")
+else:
+    search_url = "https://www.google.com/search?q=" + quote_plus(
+        f"{subject} {level} learning resources"
+    )
+    st.markdown(f"- [Find {subject} learning resources]({search_url})")
+st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
                 # -------------------- Learning Recommendations --------------------
 elif page == "Learning Recommendations":
 
     heading("🧠 Learning Recommendations", "A roadmap tailored to your subject, level, goal, and recent check-ins.")
     st.markdown(f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>", unsafe_allow_html=True)
-    topics = TOPICS[subject][level]
+    content = get_ai_learning_content(subject, level, goal)
+
+topics = (
+    content["topics"]
+    if content
+    else TOPICS.get(subject, {}).get(level, [])
+)
+
+if not topics:
+    st.warning("No learning topics available. Please try again.")
 
     for index, topic in enumerate(topics, start=1):
         is_done = topic_key(topic) in st.session_state.completed_topics
@@ -632,7 +846,17 @@ elif page == "Learning Recommendations":
         # -------------------- Study Planner --------------------
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
-    daily_topics = TOPICS[subject][level]
+    content = get_ai_learning_content(subject, level, goal)
+
+daily_topics = (
+    content["topics"]
+    if content
+    else TOPICS.get(subject, {}).get(level, [])
+)
+
+if not daily_topics:
+    st.warning("No study topics available. Please try again.")
+    st.stop()
     for day_num in range(1, 8):
         topic = daily_topics[(day_num - 1) % len(daily_topics)]
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -688,133 +912,291 @@ elif page == "Study Planner":
 
 # -------------------- Learning Resources --------------------
 elif page == "Learning Resources":
-    heading("📚 Learning Resources", "Curated resources for each subject.")
-    selected_resource_subject = st.selectbox("Choose a subject", list(RESOURCES.keys()), index=list(RESOURCES.keys()).index(subject))
-    st.markdown(f"<div class='hero'><div class='pill'>RESOURCE LIBRARY</div><h2>{selected_resource_subject}</h2><p>Learn concepts and practice at your own pace.</p></div>", unsafe_allow_html=True)
-    for title, url in RESOURCES[selected_resource_subject]:
-        st.markdown(f"<div class='glass-card'><h3>🔗 {title}</h3><p><a href='{url}' target='_blank'>{url}</a></p></div>", unsafe_allow_html=True)
+    heading("📚 Learning Resources", "Resources for your selected subject.")
+
+    selected_resource_subject = subject
+
+    st.markdown(
+        f"<div class='hero'><div class='pill'>RESOURCE LIBRARY</div>"
+        f"<h2>{selected_resource_subject}</h2>"
+        f"<p>Resources for {level} level and your {goal} goal.</p></div>",
+        unsafe_allow_html=True
+    )
+
+    resource_items = RESOURCES.get(selected_resource_subject)
+
+    if resource_items:
+        for title, url in resource_items:
+            st.markdown(
+                f"<div class='glass-card'><h3>🔗 {title}</h3>"
+                f"<p><a href='{url}' target='_blank'>{url}</a></p></div>",
+                unsafe_allow_html=True
+            )
+    else:
+        search_topics = [
+            f"{subject} {level} complete tutorial",
+            f"{subject} {level} {goal} practice",
+            f"{subject} projects and learning resources"
+        ]
+
+        for title in search_topics:
+            url = "https://www.google.com/search?q=" + quote_plus(title)
+
+            st.markdown(
+                f"<div class='glass-card'><h3>🔗 {title}</h3>"
+                f"<p><a href='{url}' target='_blank'>Find learning resources</a></p></div>",
+                unsafe_allow_html=True
+            )
 
 # -------------------- Practice Quiz --------------------
 elif page == "Practice Quiz":
     heading("📝 Practice Quiz", "Answer 10 questions, submit, and review the explanations.")
-    quiz_subject = st.selectbox("Quiz subject", list(QUIZZES.keys()), index=list(QUIZZES.keys()).index(subject))
-    questions = QUIZZES[quiz_subject]
-    st.markdown(f"<div class='hero'><div class='pill'>10 QUESTIONS • 10 POINTS</div><h2>{quiz_subject} Knowledge Check</h2><p>Choose one answer for every question.</p></div>", unsafe_allow_html=True)
-    with st.form(key=f"quiz_form_{quiz_subject}"):
+
+    quiz_subject = subject
+    content = get_ai_learning_content(subject, level, goal)
+
+    if content:
+        questions = [
+            (
+                q["question"],
+                q["options"],
+                q["answer"],
+                q["explanation"]
+            )
+            for q in content["quiz"]
+        ]
+    else:
+        questions = QUIZZES.get(quiz_subject, [])
+
+    if not questions:
+        st.warning("Quiz questions are not available. Please try again.")
+        st.stop()
+
+    st.markdown(
+        f"<div class='hero'><div class='pill'>10 QUESTIONS • 10 POINTS</div>"
+        f"<h2>{quiz_subject} Knowledge Check</h2>"
+        f"<p>{level} level • Goal: {goal}. Choose one answer for every question.</p></div>",
+        unsafe_allow_html=True
+    )
+
+    with st.form(key=f"quiz_form_{quiz_subject}_{level}"):
         answers = []
+
         for i, (question, options, correct, explanation) in enumerate(questions):
-            st.markdown(f"<div class='glass-card'><b>Question {i+1} of 10</b><br>{question}</div>", unsafe_allow_html=True)
-            answer = st.radio(f"Select an answer for question {i+1}", options, index=None,
-                              key=f"{quiz_subject}_answer_{i}", label_visibility="collapsed")
+            st.markdown(
+                f"<div class='glass-card'><b>Question {i+1} of 10</b><br>{question}</div>",
+                unsafe_allow_html=True
+            )
+
+            answer = st.radio(
+                f"Select an answer for question {i+1}",
+                options,
+                index=None,
+                key=f"{quiz_subject}_{level}_answer_{i}",
+                label_visibility="collapsed"
+            )
             answers.append(answer)
+
         submit = st.form_submit_button("🚀 Submit Quiz")
+
     if submit:
         score, chosen_indices = 0, []
+
         for i, answer in enumerate(answers):
             options = questions[i][1]
             selected_index = options.index(answer) if answer in options else None
             chosen_indices.append(selected_index)
+
             if selected_index == questions[i][2]:
                 score += 1
+
         st.session_state.quiz_results[quiz_subject] = score
         st.session_state.quiz_answers[quiz_subject] = chosen_indices
         st.session_state.quiz_submissions[quiz_subject] = True
+
         st.session_state.quiz_history.append({
-            "date": date.today().isoformat(), "subject": quiz_subject,
-            "score": score, "out_of": 10,
+            "date": date.today().isoformat(),
+            "subject": quiz_subject,
+            "score": score,
+            "out_of": 10,
         })
+
         try:
             supabase.table("learning_progress").upsert({
                 "user_id": st.session_state.user.id,
                 "quiz_results": st.session_state.quiz_results,
                 "quiz_history": st.session_state.quiz_history
             }, on_conflict="user_id").execute()
+
         except Exception as e:
             st.error(f"Could not save quiz result: {e}")
+
         st.rerun()
+
     if st.session_state.quiz_submissions.get(quiz_subject, False):
         score = st.session_state.quiz_results.get(quiz_subject, 0)
         chosen = st.session_state.quiz_answers.get(quiz_subject, [])
+
         st.markdown("---")
-        st.markdown(f"<div class='hero'><div class='pill'>QUIZ RESULT</div><h2>Your score: {score}/10</h2><p>{'Excellent work! 🌟' if score >= 9 else 'Great effort! Keep practicing. 💪' if score >= 7 else 'Good start. Review the explanations and try again. 📘'}</p></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='hero'><div class='pill'>QUIZ RESULT</div>"
+            f"<h2>Your score: {score}/10</h2>"
+            f"<p>{'Excellent work! 🌟' if score >= 9 else 'Great effort! Keep practicing. 💪' if score >= 7 else 'Good start. Review the explanations and try again. 📘'}</p></div>",
+            unsafe_allow_html=True
+        )
+
         st.progress(score / 10)
+
         if score < 5:
             st.warning("📘 Recommendation: Revise the basics and try again.")
         elif score < 8:
             st.info("📝 Recommendation: Practice more questions on this subject.")
         else:
             st.success("🚀 Recommendation: You are ready to learn the next topic!")
+
         for i, (question, options, correct, explanation) in enumerate(questions):
             selected = chosen[i] if i < len(chosen) else None
+
             if selected == correct:
                 st.success(f"Q{i+1}: Correct — {explanation}")
             else:
                 selected_text = options[selected] if selected is not None else "Not answered"
-                st.error(f"Q{i+1}: Your answer: {selected_text}. Correct answer: {options[correct]}. {explanation}")
+                st.error(
+                    f"Q{i+1}: Your answer: {selected_text}. "
+                    f"Correct answer: {options[correct]}. {explanation}"
+                )
+
         if st.button("🔄 Retake this quiz", key=f"retake_{quiz_subject}"):
             st.session_state.quiz_submissions[quiz_subject] = False
             st.session_state.quiz_results.pop(quiz_subject, None)
             st.session_state.quiz_answers.pop(quiz_subject, None)
+
             for i in range(10):
-                st.session_state.pop(f"{quiz_subject}_answer_{i}", None)
+                st.session_state.pop(
+                    f"{quiz_subject}_{level}_answer_{i}", None
+                )
+
             st.rerun()
-            # -------------------- Flashcards --------------------
+# -------------------- Flashcards --------------------
 elif page == "Flashcards":
     heading("🗂️ Flashcards", "Review key concepts. Reveal the answer, then move to another card.")
-    cards = FLASHCARDS[subject]
+
+    content = get_ai_learning_content(subject, level, goal)
+
+    if content:
+        cards = [
+            (card["question"], card["answer"])
+            for card in content["flashcards"]
+        ]
+    else:
+        cards = FLASHCARDS.get(subject, [])
+
     if cards:
         idx = st.session_state.flashcard_index % len(cards)
         prompt, answer = cards[idx]
-        st.markdown(f"<div class='hero'><div class='pill'>CARD {idx + 1} OF {len(cards)}</div><h2>{prompt}</h2><p>Try to recall the answer before revealing it.</p></div>", unsafe_allow_html=True)
+
+        st.markdown(
+            f"<div class='hero'><div class='pill'>CARD {idx + 1} OF {len(cards)}</div>"
+            f"<h2>{prompt}</h2>"
+            f"<p>{level} level • {goal}</p></div>",
+            unsafe_allow_html=True
+        )
+
         if st.button("👀 Reveal answer", key="reveal_flashcard"):
             st.session_state.flashcard_revealed = True
+
         if st.session_state.flashcard_revealed:
             st.success(answer)
+
         prev_col, next_col = st.columns(2)
+
         with prev_col:
             if st.button("⬅️ Previous card"):
                 st.session_state.flashcard_index = (idx - 1) % len(cards)
                 st.session_state.flashcard_revealed = False
                 st.rerun()
+
         with next_col:
             if st.button("Next card ➡️"):
                 st.session_state.flashcard_index = (idx + 1) % len(cards)
                 st.session_state.flashcard_revealed = False
                 st.rerun()
 
+    else:
+        st.warning("Flashcards are not available. Please try again.")
 # -------------------- Study Assistant --------------------
 elif page == "Study Assistant":
-    heading("🤖 Study Assistant", "A built-in study guide using your selected subject, level, goal, and recorded progress.")
-    question = st.text_area("What would you like help with?", placeholder="For example: What should I study next? How can I improve my quiz score?")
+    heading(
+        "🤖 Study Assistant",
+        "Ask questions and get personalized AI study guidance."
+    )
+
+    question = st.text_area(
+        "What would you like help with?",
+        placeholder="For example: Explain this topic, how can I improve, or what should I study next?"
+    )
+
     if st.button("Get study guidance"):
-        st.session_state.study_assistant_question = question.strip()
+        if question.strip():
+            st.session_state.study_assistant_question = question.strip()
+        else:
+            st.warning("Please enter a question first.")
+
     if st.session_state.study_assistant_question:
-        q = st.session_state.study_assistant_question.lower()
+        q = st.session_state.study_assistant_question
+
         next_topic, advice = next_recommendation()
         latest_score = st.session_state.quiz_results.get(subject)
-        st.markdown("### Your study guidance")
-        if any(word in q for word in ["next", "recommend", "study", "topic"]):
-            st.info(f"**Suggested next topic: {next_topic}**\n\n{advice}\n\nYour goal is **{goal}**, so use the matching approach: " +
-                    ("summarize the concept and examples." if goal == "Theory" else
-                     "solve a few focused exercises." if goal == "Coding Practice" else
-                     "build a small project feature."))
-        elif any(word in q for word in ["score", "quiz", "improve", "weak"]):
-            if latest_score is None:
-                st.info("Take a quiz first. Your score and explanations will help personalize the next recommendation.")
-            elif latest_score < 5:
-                st.warning(f"Your latest {subject} score is {latest_score}/10. Revisit foundational topics, review each explanation, and retry after practice.")
-            elif latest_score < 8:
-                st.info(f"Your latest {subject} score is {latest_score}/10. Review missed answers and complete a short practice session.")
-            else:
-                st.success(f"Your latest {subject} score is {latest_score}/10. Try the next roadmap topic or a small challenge.")
-        elif any(word in q for word in ["resource", "link", "learn"]):
-            st.write("Here are resources for your selected subject:")
-            for title, url in RESOURCES[subject]:
-                st.markdown(f"- [{title}]({url})")
-        else:
-            st.write(f"For **{subject} ({level})**, start with **{next_topic}**. {advice}")
-            st.caption("This built-in assistant uses simple rules; it is not connected to a live generative AI model.")
 
+        prompt = f"""
+        You are LearnWise AI, a friendly and beginner-friendly study assistant.
+
+        Student's subject: {subject}
+        Student's level: {level}
+        Learning goal: {goal}
+        Latest quiz score: {latest_score}
+        Recommended next topic: {next_topic}
+        Recommendation: {advice}
+
+        Student's question: {q}
+
+        Give a clear, accurate and helpful answer.
+        Use simple language suitable for the student's level.
+        Include examples when useful.
+        Connect your answer to the student's learning goal.
+        Do not assume the student already knows advanced concepts.
+        """
+
+        ai_answer = generate_ai_content(prompt)
+
+        st.markdown("### Your study guidance")
+
+        if ai_answer:
+            st.markdown(ai_answer)
+
+        else:
+            st.info(
+                f"For **{subject} ({level})**, start with "
+                f"**{next_topic}**. {advice}"
+            )
+
+            if latest_score is None:
+                st.caption("Take a quiz to receive score-based recommendations.")
+            elif latest_score < 5:
+                st.warning(
+                    f"Your latest score is {latest_score}/10. "
+                    "Revise the basics and practise again."
+                )
+            elif latest_score < 8:
+                st.info(
+                    f"Your latest score is {latest_score}/10. "
+                    "Review missed answers and practise more."
+                )
+            else:
+                st.success(
+                    f"Your latest score is {latest_score}/10. "
+                    "Try the next topic or a small challenge."
+                )
 # -------------------- My Progress --------------------
 elif page == "My Progress":
     heading("📊 My Progress", "Review completion, quiz performance, study consistency, and achievements.")
