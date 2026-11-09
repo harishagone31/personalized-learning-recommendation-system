@@ -722,15 +722,15 @@ if page == "Dashboard":
     q3.markdown("<div class='glass-card'><h3>📊 Track</h3><p>Review scores and study consistency.</p></div>", unsafe_allow_html=True)
     content = get_ai_learning_content(subject, level, goal)
 
-topics = (
-    content["topics"]
-    if content
-    else TOPICS.get(subject, {}).get(level, [])
-)
+    topics = (
+        content["topics"]
+        if content
+        else TOPICS.get(subject, {}).get(level, [])
+    )
 
-if not topics:
-    st.warning("No learning topics available. Please try again.")
-    st.stop()
+    if not topics:
+        st.warning("No learning topics available. Please try again.")
+        st.stop()
 
     for index, topic in enumerate(topics, start=1):
         is_done = topic_key(topic) in st.session_state.completed_topics
