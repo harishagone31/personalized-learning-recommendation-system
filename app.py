@@ -397,6 +397,26 @@ defaults = {
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
+        # -------------------- Load saved learning progress --------------------
+
+if st.session_state.user is not None:
+    user_id = st.session_state.user.id
+
+    try:
+        result = supabase.table("learning_progress") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .execute()
+
+        if result.data:
+            saved_progress = result.data[0]
+
+            st.session_state.planner_checks = saved_progress.get("planner_checks") or {}
+            st.session_state.daily_goal_minutes = saved_progress.get("daily_goal_minutes") or 30
+            st.session_state.daily_logs = saved_progress.get("daily_logs") or {}
+
+    except Exception as e:
+        st.error(f"Could not load saved progress: {e}")
 
 # -------------------- Sidebar --------------------
 with st.sidebar:
@@ -468,7 +488,12 @@ def next_recommendation():
                 return topic, "Your check-in is strong. Mark this topic complete and continue."
             return topic, "Start here, then complete a short practice session."
     return "Review your completed topics", "You have completed this level's roadmap. Try a challenge or review."
-# -------------------- Dashboard --------------------
+
+# -------------------- Learning Recommendations --------------------
+elif page == "Learning Recommendations":
+    heading("🧠 Learning Recommendations", "A roadmap tailored to your subject, level, goal, and recent check-ins.")
+    st.markdown(f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>", unsafe_allow_html=True)
+    topics = TOPICS[subject][level]# -------------------- Dashboard --------------------
 if page == "Dashboard":
     st.markdown(f"""
     <div class="hero">
@@ -509,11 +534,6 @@ if page == "Dashboard":
     q2.markdown("<div class='glass-card'><h3>📝 Practice</h3><p>Take a quiz and review explanations.</p></div>", unsafe_allow_html=True)
     q3.markdown("<div class='glass-card'><h3>📊 Track</h3><p>Review scores and study consistency.</p></div>", unsafe_allow_html=True)
 
-# -------------------- Learning Recommendations --------------------
-elif page == "Learning Recommendations":
-    heading("🧠 Learning Recommendations", "A roadmap tailored to your subject, level, goal, and recent check-ins.")
-    st.markdown(f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>", unsafe_allow_html=True)
-    topics = TOPICS[subject][level]
     for index, topic in enumerate(topics, start=1):
         is_done = topic_key(topic) in st.session_state.completed_topics
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -582,7 +602,13 @@ elif page == "Study Planner":
             st.markdown(f"**Day {day_num} · {topic}**")
             st.caption("Suggested session: 25 minutes learning + 15 minutes practice + 5 minutes recap.")
         with col2:
-            st.checkbox("Complete", key=planner_key(day_num, "done"))
+            st.checkbox(
+    "Complete",
+    value=st.session_state.planner_checks.get(
+        planner_key(day_num, "done"), False
+    ),
+    key=planner_key(day_num, "done")
+)
         st.markdown("</div>", unsafe_allow_html=True)
     completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
     st.progress(completed_days / 7)
@@ -600,6 +626,16 @@ elif page == "Study Planner":
         st.success("Today's study time saved!")
         st.rerun()
     st.caption(f"Current streak: {get_streak()} day(s) 🔥. Study time is stored for this session.")
+    try:
+        supabase.table("learning_progress").upsert({
+            "user_id": st.session_state.user.id,
+            "planner_checks": st.session_state.planner_checks,
+            "daily_goal_minutes": int(st.session_state.daily_goal_minutes),
+            "daily_logs": st.session_state.daily_logs
+        }, on_conflict="user_id").execute()
+
+    except Exception as e:
+        st.error(f"Could not save progress: {e}")
 
 # -------------------- Learning Resources --------------------
 elif page == "Learning Resources":
