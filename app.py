@@ -59,7 +59,7 @@ if st.session_state.user is None:
                 st.error(str(e))
 
     else:
-        if st.button("Login"):
+         if st.button("Login"):
             try:
                 response = supabase.auth.sign_in_with_password({
                     "email": email,
@@ -75,12 +75,10 @@ if st.session_state.user is None:
                 else:
                     st.info("Please check your email for confirmation.")
 
-                except Exception as e:
-                   st.error(f"Login error: {e}")
+            except Exception as e:
+                st.error(f"Login error: {e}")
 
-
-
-    st.stop() 
+    st.stop()
     
 
 # -------------------- Theme --------------------
