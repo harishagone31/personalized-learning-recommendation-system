@@ -534,6 +534,7 @@ if page == "Dashboard":
     q1.markdown("<div class='glass-card'><h3>📖 Learn</h3><p>Explore your personalized roadmap.</p></div>", unsafe_allow_html=True)
     q2.markdown("<div class='glass-card'><h3>📝 Practice</h3><p>Take a quiz and review explanations.</p></div>", unsafe_allow_html=True)
     q3.markdown("<div class='glass-card'><h3>📊 Track</h3><p>Review scores and study consistency.</p></div>", unsafe_allow_html=True)
+    topics = TOPICS[subject][level]
 
     for index, topic in enumerate(topics, start=1):
         is_done = topic_key(topic) in st.session_state.completed_topics
