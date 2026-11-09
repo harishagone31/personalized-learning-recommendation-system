@@ -414,6 +414,10 @@ if st.session_state.user is not None:
             st.session_state.planner_checks = saved_progress.get("planner_checks") or {}
             st.session_state.daily_goal_minutes = saved_progress.get("daily_goal_minutes") or 30
             st.session_state.daily_logs = saved_progress.get("daily_logs") or {}
+            st.session_state.completed_topics = set(saved_progress.get("completed_topics") or [])
+            st.session_state.quiz_results = saved_progress.get("quiz_results") or {}
+            st.session_state.quiz_history = saved_progress.get("quiz_history") or []
+            st.session_state.topic_attempts = saved_progress.get("topic_attempts") or {}
 
     except Exception as e:
         st.error(f"Could not load saved progress: {e}")
