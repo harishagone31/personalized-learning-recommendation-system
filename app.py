@@ -413,6 +413,61 @@ if supabase and st.session_state.user is None:
                 st.caption(str(exc)[:300])
     st.stop()
 
+# -------------------- Persistent user progress (Supabase) --------------------
+PERSISTED_PROGRESS_KEYS = (
+    "student_name", "subject", "level", "goal", "completed_topics",
+    "quiz_results", "quiz_submissions", "quiz_answers", "topic_attempts",
+    "quiz_history", "planner_checks", "daily_goal_minutes", "daily_logs",
+    "flashcard_index", "flashcard_revealed",
+)
+
+
+def load_user_progress():
+    """Restore saved learning progress for the currently authenticated user."""
+    if not supabase or not st.session_state.get("user"):
+        return
+    user_id = st.session_state.user.id
+    if st.session_state.get("progress_loaded_for") == user_id:
+        return
+    try:
+        response = (supabase.table("weekly_progress")
+                    .select("learning_data, completed_days")
+                    .eq("user_id", user_id)
+                    .limit(1)
+                    .execute())
+        row = response.data[0] if response.data else {}
+        saved = row.get("learning_data") or {}
+        for key in PERSISTED_PROGRESS_KEYS:
+            if key in saved:
+                value = saved[key]
+                if key == "completed_topics":
+                    value = set(value or [])
+                st.session_state[key] = value
+        # Restore Streamlit checkbox widget state from the saved planner dictionary.
+        for planner_state_key, is_checked in (st.session_state.get("planner_checks") or {}).items():
+            st.session_state[planner_state_key] = bool(is_checked)
+        # Restore the existing weekly checklist column for older saved records.
+        if not saved.get("planner_checks"):
+            days = row.get("completed_days") or []
+            for day_number in range(1, 8):
+                planner_state_key = f"{st.session_state.subject}-{st.session_state.level}-{day_number}-done"
+                st.session_state[planner_state_key] = day_number in days
+                st.session_state.planner_checks[planner_state_key] = day_number in days
+        # Validate stored profile values against the supported choices.
+        if st.session_state.get("subject") not in TOPICS:
+            st.session_state.subject = "Python"
+        if st.session_state.get("level") not in ("Beginner", "Intermediate", "Advanced"):
+            st.session_state.level = "Beginner"
+        if st.session_state.get("goal") not in ("Theory", "Coding Practice", "Projects"):
+            st.session_state.goal = "Coding Practice"
+        st.session_state.progress_loaded_for = user_id
+    except Exception as exc:
+        st.session_state.progress_load_error = str(exc)[:250]
+        st.session_state.progress_loaded_for = user_id
+
+
+load_user_progress()
+
 with st.sidebar:
     st.markdown("## 🧠 LearnWise AI")
     st.caption("Your personalized learning companion")
@@ -438,15 +493,16 @@ with st.sidebar:
     )
     st.session_state.level = st.selectbox("Current level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(st.session_state.level))
     st.session_state.goal = st.selectbox("Learning goal", ["Theory", "Coding Practice", "Projects"], index=["Theory", "Coding Practice", "Projects"].index(st.session_state.goal))
-    st.markdown("<div class='small-muted'>Prototype • Session-based progress</div>", unsafe_allow_html=True)
+    st.markdown("<div class='small-muted'>Your progress is saved to your account</div>", unsafe_allow_html=True)
     if supabase and st.button("Logout"):
         try:
             supabase.auth.sign_out()
         except Exception:
             pass
-        st.session_state.user = None
-        st.session_state.access_token = ""
-        st.session_state.refresh_token = ""
+        # Clear this browser session's user data; it will be reloaded from Supabase on next login.
+        for state_key in list(st.session_state.keys()):
+            if state_key not in ("auth_email", "auth_password"):
+                del st.session_state[state_key]
         st.rerun()
 
 name = st.session_state.student_name.strip() or "Learner"
@@ -600,57 +656,12 @@ elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
     daily_topics = TOPICS[subject][level]
 
-    # Load the user's saved weekly checklist once per signed-in session.
-    if supabase and st.session_state.get("user") and not st.session_state.get("planner_loaded"):
-        try:
-            user_id = st.session_state.user.id
-            saved = (supabase.table("weekly_progress")
-                     .select("completed_days")
-                     .eq("user_id", user_id)
-                     .execute())
-            saved_days = saved.data[0].get("completed_days", []) if saved.data else []
-            for day_num in range(1, 8):
-                st.session_state[planner_key(day_num, "done")] = day_num in saved_days
-            st.session_state.planner_loaded = True
-        except Exception:
-            # The planner remains usable even if the optional database table is unavailable.
-            st.session_state.planner_loaded = True
-            st.info("Your planner is working in this session, but saved checklist data could not be loaded.")
-
+    # Checklist values are restored from the user's saved learning_data on login.
     for day_num in range(1, 8):
-        topic = daily_topics[(day_num - 1) % len(daily_topics)]
-        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-        col1, col2 = st.columns([5, 1])
-        with col1:
-            st.markdown(f"**Day {day_num} · {topic}**")
-            st.caption("Suggested session: 25 minutes learning + 15 minutes practice + 5 minutes recap.")
-        with col2:
-            st.checkbox("Complete", key=planner_key(day_num, "done"))
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.session_state.planner_checks[planner_key(day_num, "done")] = bool(
+            st.session_state.get(planner_key(day_num, "done"), False)
+        )
     completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
-
-    # Save the checklist for signed-in users; database failures never stop the app.
-    if supabase and st.session_state.get("user"):
-        try:
-            user_id = st.session_state.user.id
-            checked_days = [day_num for day_num in range(1, 8)
-                            if st.session_state.get(planner_key(day_num, "done"), False)]
-            existing = (supabase.table("weekly_progress")
-                        .select("user_id")
-                        .eq("user_id", user_id)
-                        .execute())
-            if existing.data:
-                (supabase.table("weekly_progress")
-                 .update({"completed_days": checked_days})
-                 .eq("user_id", user_id)
-                 .execute())
-            else:
-                supabase.table("weekly_progress").insert({
-                    "user_id": user_id,
-                    "completed_days": checked_days,
-                }).execute()
-        except Exception:
-            st.caption("Checklist changes are available in this session; database saving is temporarily unavailable.")
 
     st.progress(completed_days / 7)
     st.caption(f"Weekly plan progress: {completed_days}/7 days.")
@@ -666,7 +677,7 @@ elif page == "Study Planner":
         st.session_state.daily_logs[today_key] = int(logged_minutes)
         st.success("Today's study time saved!")
         st.rerun()
-    st.caption(f"Current streak: {get_streak()} day(s) 🔥. Study time is stored for this session.")
+    st.caption(f"Current streak: {get_streak()} day(s) 🔥. Study time is saved to your account when signed in.")
 
 # -------------------- Learning Resources --------------------
 elif page == "Learning Resources":
@@ -837,3 +848,48 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True,
 )
+
+
+# Save the complete learning profile after each Streamlit interaction/rerun.
+# This includes completed topics, quiz scores/history, planner checks, and study logs.
+if supabase and st.session_state.get("user"):
+    try:
+        user_id = st.session_state.user.id
+        learning_data = {}
+        for key in PERSISTED_PROGRESS_KEYS:
+            value = st.session_state.get(key)
+            if key == "completed_topics":
+                value = sorted(list(value or []))
+            learning_data[key] = value
+        current_checked_days = [
+            day_number for day_number in range(1, 8)
+            if st.session_state.get(f"{st.session_state.subject}-{st.session_state.level}-{day_number}-done", False)
+        ]
+        saved_row = (supabase.table("weekly_progress")
+                     .select("user_id")
+                     .eq("user_id", user_id)
+                     .limit(1)
+                     .execute())
+        progress_record = {
+            "user_id": user_id,
+            "completed_days": current_checked_days,
+            "learning_data": learning_data,
+        }
+        if saved_row.data:
+            (supabase.table("weekly_progress")
+             .update({
+                 "completed_days": current_checked_days,
+                 "learning_data": learning_data,
+             })
+             .eq("user_id", user_id)
+             .execute())
+        else:
+            supabase.table("weekly_progress").insert(progress_record).execute()
+        st.session_state.pop("progress_save_error", None)
+    except Exception as exc:
+        st.session_state.progress_save_error = str(exc)[:250]
+
+if st.session_state.get("progress_load_error"):
+    st.warning("Saved progress could not be loaded. Check the Supabase SQL setup below. " + st.session_state.progress_load_error)
+if st.session_state.get("progress_save_error"):
+    st.warning("Progress could not be saved to Supabase. Check the Supabase SQL setup below. " + st.session_state.progress_save_error)
