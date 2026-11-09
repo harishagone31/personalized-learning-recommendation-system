@@ -75,8 +75,10 @@ if st.session_state.user is None:
                 else:
                     st.info("Please check your email for confirmation.")
 
-            except Exception:
-                st.error("Login failed. Check your email and password.")
+                except Exception as e:
+                   st.error(f"Login error: {e}")
+
+
 
     st.stop() 
     
