@@ -705,7 +705,6 @@ elif page == "Practice Quiz":
             answer = st.radio(f"Select an answer for question {i+1}", options, index=None,
                               key=f"{quiz_subject}_answer_{i}", label_visibility="collapsed")
             answers.append(answer)
-            st.write("DEBUG ANSWERS:",answers)
         submit = st.form_submit_button("🚀 Submit Quiz")
     if submit:
         score, chosen_indices = 0, []
