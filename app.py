@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
+from supabase import create_client
 
 # ------------------------------------------------------------
 # LearnWise AI - Personalized Learning Recommendation System
@@ -14,6 +15,70 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+if (
+    "access_token" in st.session_state
+    and "refresh_token" in st.session_state
+):
+    supabase.auth.set_session(
+        st.session_state.access_token,
+        st.session_state.refresh_token
+    )
+   # -------------------- Login and Signup --------------------
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+if st.session_state.user is None:
+    st.title("🧠 LearnWise AI")
+    st.subheader("Login or Create an Account")
+
+    auth_option = st.radio(
+        "Choose an option",
+        ["Login", "Sign Up"],
+        horizontal=True
+    )
+
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+
+    if auth_option == "Sign Up":
+        if st.button("Create Account"):
+            try:
+                response = supabase.auth.sign_up({
+                    "email": email,
+                    "password": password
+                })
+                st.success("Account created! Please check your email.")
+            except Exception as e:
+                st.error(str(e))
+
+    else:
+        if st.button("Login"):
+            try:
+                response = supabase.auth.sign_in_with_password({
+                    "email": email,
+                    "password": password
+                })
+
+                if response.session is not None:
+                    st.session_state.user = response.user
+                    st.session_state.access_token = response.session.access_token
+                    st.session_state.refresh_token = response.session.refresh_token
+                    st.success("Login successful!")
+                    st.rerun()
+                else:
+                    st.info("Please check your email for confirmation.")
+
+            except Exception:
+                st.error("Login failed. Check your email and password.")
+
+    st.stop() 
+    
 
 # -------------------- Theme --------------------
 st.markdown("""
@@ -335,6 +400,12 @@ for key, value in defaults.items():
 
 # -------------------- Sidebar --------------------
 with st.sidebar:
+    if st.button("Logout"):
+    supabase.auth.sign_out()
+    st.session_state.user = None
+    st.session_state.pop("access_token", None)
+    st.session_state.pop("refresh_token", None)
+    st.rerun()
     st.markdown("## 🧠 LearnWise AI")
     st.caption("Your personalized learning companion")
     st.markdown("---")
