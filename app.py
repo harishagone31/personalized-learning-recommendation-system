@@ -2,19 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
-import os
-import json
-import re
-
-try:
-    from supabase import create_client
-except Exception:
-    create_client = None
-
-try:
-    from google import genai
-except Exception:
-    genai = None
 
 # ------------------------------------------------------------
 # LearnWise AI - Personalized Learning Recommendation System
@@ -27,30 +14,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-# -------------------- External services --------------------
-def read_setting(name, default=""):
-    """Read a secret from environment variables or Streamlit secrets."""
-    value = os.getenv(name)
-    if value:
-        return value.strip()
-    try:
-        return str(st.secrets.get(name, default)).strip()
-    except Exception:
-        return default
-
-SUPABASE_URL = read_setting("SUPABASE_URL")
-SUPABASE_KEY = read_setting("SUPABASE_KEY")
-GEMINI_API_KEY = read_setting("GEMINI_API_KEY") or read_setting("GOOGLE_API_KEY")
-GEMINI_MODEL = read_setting("GEMINI_MODEL", "gemini-3.8-flash")
-
-supabase = None
-if create_client and SUPABASE_URL and SUPABASE_KEY:
-    try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception:
-        supabase = None
-
 
 # -------------------- Theme --------------------
 st.markdown("""
@@ -364,150 +327,30 @@ defaults = {
     "quiz_results": {}, "quiz_submissions": {}, "quiz_answers": {},
     "topic_attempts": {}, "quiz_history": [], "flashcard_index": 0,
     "flashcard_revealed": False, "daily_goal_minutes": 30,
-    "daily_logs": {}, "study_assistant_question": "", "study_assistant_result": None,
-    "user": None, "access_token": "", "refresh_token": "",
-    "ai_pack_cache": {}, "ai_assistant_cache": {},
-    "custom_subject_name": "",
+    "daily_logs": {}, "study_assistant_question": "",
 }
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# Restore the Supabase session when the app reruns.
-if supabase and st.session_state.get("access_token") and st.session_state.get("refresh_token"):
-    try:
-        supabase.auth.set_session(
-            st.session_state.access_token,
-            st.session_state.refresh_token,
-        )
-    except Exception:
-        st.session_state.user = None
-        st.session_state.access_token = ""
-        st.session_state.refresh_token = ""
-
-# Login is required when Supabase credentials are configured. If they are not,
-# the app remains usable in demo mode rather than crashing during startup.
-if supabase and st.session_state.user is None:
-    st.title("🧠 LearnWise AI")
-    st.subheader("Login or create an account")
-    auth_mode = st.radio("Choose an option", ["Login", "Sign Up"], horizontal=True)
-    auth_email = st.text_input("Email address", key="auth_email")
-    auth_password = st.text_input("Password", type="password", key="auth_password")
-    if st.button("Login" if auth_mode == "Login" else "Create Account", type="primary"):
-        if not auth_email.strip() or not auth_password:
-            st.warning("Enter both your email and password.")
-        else:
-            try:
-                if auth_mode == "Sign Up":
-                    result = supabase.auth.sign_up({"email": auth_email.strip(), "password": auth_password})
-                    if getattr(result, "session", None):
-                        st.session_state.user = result.user
-                        st.session_state.access_token = result.session.access_token
-                        st.session_state.refresh_token = result.session.refresh_token
-                        st.success("Account created and signed in.")
-                    else:
-                        st.success("Account created. Check your email if confirmation is enabled, then log in.")
-                else:
-                    result = supabase.auth.sign_in_with_password({"email": auth_email.strip(), "password": auth_password})
-                    st.session_state.user = result.user
-                    st.session_state.access_token = result.session.access_token
-                    st.session_state.refresh_token = result.session.refresh_token
-                    st.success("Login successful.")
-                    st.rerun()
-            except Exception as exc:
-                st.error("Authentication failed. Check the email/password and Supabase settings.")
-                st.caption(str(exc)[:300])
-    st.stop()
-
-# -------------------- Gemini AI helpers --------------------
-@st.cache_data(ttl=3600, show_spinner=False)
-def ask_gemini_cached(api_key, model_name, prompt):
-    """Cache Gemini responses so Streamlit reruns do not spend extra quota."""
-    if not api_key or genai is None:
-        return {"ok": False, "text": ""}
-    try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-        )
-        answer = getattr(response, "text", None)
-        if not answer or not answer.strip():
-            return {"ok": False, "text": ""}
-        return {"ok": True, "text": answer.strip()}
-    except Exception as exc:
-        # Return a cacheable failure; never let a temporary AI error crash the app.
-        message = str(exc).lower()
-        if "429" in message or "quota" in message or "resource_exhausted" in message:
-            reason = "Gemini daily quota is currently exhausted. The rest of LearnWise AI will continue using its built-in study content."
-        elif "503" in message or "unavailable" in message or "high demand" in message:
-            reason = "Gemini is temporarily busy. Please try again later; the rest of the app is still available."
-        elif "404" in message or "not found" in message:
-            reason = "The configured Gemini model is not available for this API key. Check GEMINI_MODEL in Render."
-        else:
-            reason = "Gemini could not respond right now. Check the API key and Render logs if this continues."
-        return {"ok": False, "text": reason}
-
-def generate_ai_text(prompt, cache_key):
-    """One response per unique prompt per browser session, including failures."""
-    if cache_key not in st.session_state.ai_assistant_cache:
-        st.session_state.ai_assistant_cache[cache_key] = ask_gemini_cached(
-            GEMINI_API_KEY, GEMINI_MODEL, prompt
-        )
-    return st.session_state.ai_assistant_cache[cache_key]
-
-def clean_json_response(raw_text):
-    text = raw_text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```$", "", text)
-    return json.loads(text)
-
+# -------------------- Sidebar --------------------
 with st.sidebar:
     st.markdown("## 🧠 LearnWise AI")
     st.caption("Your personalized learning companion")
-    if not supabase:
-        st.caption("Demo mode · Supabase login is not configured")
     st.markdown("---")
     page = st.radio(
         "NAVIGATION",
         ["Dashboard", "Learning Recommendations", "Study Planner", "Learning Resources",
-         "Practice Quiz", "Flashcards", "AI Learning Studio", "Study Assistant", "My Progress"],
+         "Practice Quiz", "Flashcards", "Study Assistant", "My Progress"],
         label_visibility="visible",
     )
     st.markdown("---")
     st.markdown("### 👤 Student profile")
     st.session_state.student_name = st.text_input("Your name", st.session_state.student_name)
-    subject_choices = list(TOPICS.keys()) + ["Other (Enter your own)"]
-    previous_subject = st.session_state.subject if st.session_state.subject in TOPICS else "Other (Enter your own)"
-    chosen_subject = st.selectbox("Learning subject", subject_choices, index=subject_choices.index(previous_subject))
-    if chosen_subject == "Other (Enter your own)":
-        custom_subject = st.text_input("Enter your subject", value=st.session_state.custom_subject_name, placeholder="e.g. Cybersecurity")
-        st.session_state.custom_subject_name = custom_subject.strip()
-        subject_name = st.session_state.custom_subject_name or "Custom Subject"
-        if subject_name not in TOPICS:
-            TOPICS[subject_name] = {
-                "Beginner": ["Introduction and fundamentals", "Key terminology", "Core concepts", "Worked examples", "Basic practice", "Review and recap"],
-                "Intermediate": ["Core techniques", "Problem solving", "Tools and workflows", "Applied exercises", "Mini project", "Review and evaluation"],
-                "Advanced": ["Advanced concepts", "System design", "Optimization", "Real-world applications", "Independent project", "Testing and evaluation"],
-            }
-            RESOURCES[subject_name] = RESOURCES.get("Python", [])
-            QUIZZES[subject_name] = QUIZZES.get("Python", [])
-            FLASHCARDS[subject_name] = FLASHCARDS.get("Python", [])
-        st.session_state.subject = subject_name
-    else:
-        st.session_state.subject = chosen_subject
+    st.session_state.subject = st.selectbox("Learning subject", list(TOPICS.keys()), index=list(TOPICS.keys()).index(st.session_state.subject))
     st.session_state.level = st.selectbox("Current level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(st.session_state.level))
     st.session_state.goal = st.selectbox("Learning goal", ["Theory", "Coding Practice", "Projects"], index=["Theory", "Coding Practice", "Projects"].index(st.session_state.goal))
     st.markdown("<div class='small-muted'>Prototype • Session-based progress</div>", unsafe_allow_html=True)
-    if supabase and st.button("Logout"):
-        try:
-            supabase.auth.sign_out()
-        except Exception:
-            pass
-        st.session_state.user = None
-        st.session_state.access_token = ""
-        st.session_state.refresh_token = ""
-        st.rerun()
 
 name = st.session_state.student_name.strip() or "Learner"
 subject, level, goal = st.session_state.subject, st.session_state.level, st.session_state.goal
@@ -659,24 +502,6 @@ elif page == "Learning Recommendations":
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
     daily_topics = TOPICS[subject][level]
-
-    # Load the user's saved weekly checklist once per signed-in session.
-    if supabase and st.session_state.get("user") and not st.session_state.get("planner_loaded"):
-        try:
-            user_id = st.session_state.user.id
-            saved = (supabase.table("weekly_progress")
-                     .select("completed_days")
-                     .eq("user_id", user_id)
-                     .execute())
-            saved_days = saved.data[0].get("completed_days", []) if saved.data else []
-            for day_num in range(1, 8):
-                st.session_state[planner_key(day_num, "done")] = day_num in saved_days
-            st.session_state.planner_loaded = True
-        except Exception:
-            # The planner remains usable even if the optional database table is unavailable.
-            st.session_state.planner_loaded = True
-            st.info("Your planner is working in this session, but saved checklist data could not be loaded.")
-
     for day_num in range(1, 8):
         topic = daily_topics[(day_num - 1) % len(daily_topics)]
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -688,30 +513,6 @@ elif page == "Study Planner":
             st.checkbox("Complete", key=planner_key(day_num, "done"))
         st.markdown("</div>", unsafe_allow_html=True)
     completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
-
-    # Save the checklist for signed-in users; database failures never stop the app.
-    if supabase and st.session_state.get("user"):
-        try:
-            user_id = st.session_state.user.id
-            checked_days = [day_num for day_num in range(1, 8)
-                            if st.session_state.get(planner_key(day_num, "done"), False)]
-            existing = (supabase.table("weekly_progress")
-                        .select("user_id")
-                        .eq("user_id", user_id)
-                        .execute())
-            if existing.data:
-                (supabase.table("weekly_progress")
-                 .update({"completed_days": checked_days})
-                 .eq("user_id", user_id)
-                 .execute())
-            else:
-                supabase.table("weekly_progress").insert({
-                    "user_id": user_id,
-                    "completed_days": checked_days,
-                }).execute()
-        except Exception:
-            st.caption("Checklist changes are available in this session; database saving is temporarily unavailable.")
-
     st.progress(completed_days / 7)
     st.caption(f"Weekly plan progress: {completed_days}/7 days.")
     for day_num in range(1, 8):
@@ -731,9 +532,7 @@ elif page == "Study Planner":
 # -------------------- Learning Resources --------------------
 elif page == "Learning Resources":
     heading("📚 Learning Resources", "Curated resources for each subject.")
-    resource_subjects = list(RESOURCES.keys())
-    default_resource_index = resource_subjects.index(subject) if subject in resource_subjects else 0
-    selected_resource_subject = st.selectbox("Choose a subject", resource_subjects, index=default_resource_index)
+    selected_resource_subject = st.selectbox("Choose a subject", list(RESOURCES.keys()), index=list(RESOURCES.keys()).index(subject))
     st.markdown(f"<div class='hero'><div class='pill'>RESOURCE LIBRARY</div><h2>{selected_resource_subject}</h2><p>Learn concepts and practice at your own pace.</p></div>", unsafe_allow_html=True)
     for title, url in RESOURCES[selected_resource_subject]:
         st.markdown(f"<div class='glass-card'><h3>🔗 {title}</h3><p><a href='{url}' target='_blank'>{url}</a></p></div>", unsafe_allow_html=True)
@@ -818,93 +617,38 @@ elif page == "Flashcards":
                 st.session_state.flashcard_revealed = False
                 st.rerun()
 
-# -------------------- AI Learning Studio --------------------
-elif page == "AI Learning Studio":
-    heading("✨ AI Learning Studio", "Generate a subject-specific lesson, practice quiz, flashcards, and a short study plan with Gemini.")
-    st.markdown(f"<div class='hero'><div class='pill'>GEMINI AI • {subject.upper()} • {level.upper()}</div><h2>Your personalized study pack</h2><p>Generate only when you press the button. Results and failures are cached to avoid repeated API calls during page reruns.</p></div>", unsafe_allow_html=True)
-    ai_goal = st.selectbox("What should the AI focus on?", ["Concept explanation", "Coding practice", "Exam preparation", "Mini project"], key="ai_studio_goal")
-    ai_topic = st.text_input("Topic (optional)", placeholder="Leave blank to use the next recommended topic", key="ai_studio_topic")
-    if st.button("🚀 Generate AI study pack", type="primary"):
-        selected_topic = ai_topic.strip() or next_recommendation()[0]
-        pack_key = f"{subject}|{level}|{goal}|{ai_goal}|{selected_topic}"
-        prompt = f"""You are LearnWise AI, a careful and encouraging tutor. Create a useful study pack for a student.
-Subject: {subject}
-Level: {level}
-Learning goal: {goal}
-Focus: {ai_goal}
-Topic: {selected_topic}
-Return valid JSON only with these keys: lesson, key_points, examples, practice_questions, answers, flashcards, seven_day_plan.
-lesson must be a beginner-friendly explanation (about 180-250 words). key_points must be a list of 5 strings. examples must be a list of 2 strings. practice_questions must be a list of 5 questions. answers must be a list of 5 corresponding concise answers. flashcards must be a list of 5 objects, each with question and answer strings. seven_day_plan must be a list of 7 short daily tasks. Keep facts accurate and match the selected level."""
-        result = generate_ai_text(prompt, pack_key)
-        st.session_state.ai_pack_cache[pack_key] = result
-        st.session_state.latest_ai_pack_key = pack_key
-        st.session_state.latest_ai_pack_topic = selected_topic
-    latest_key = st.session_state.get("latest_ai_pack_key")
-    if latest_key and latest_key in st.session_state.ai_pack_cache:
-        result = st.session_state.ai_pack_cache[latest_key]
-        if result.get("ok"):
-            try:
-                pack = clean_json_response(result["text"])
-                st.markdown(f"### 📘 {st.session_state.get('latest_ai_pack_topic', 'Your topic')}")
-                st.markdown(pack.get("lesson", "Lesson unavailable."))
-                st.markdown("#### Key points")
-                for item in pack.get("key_points", []):
-                    st.markdown(f"- {item}")
-                st.markdown("#### Examples")
-                for item in pack.get("examples", []):
-                    st.markdown(f"- {item}")
-                st.markdown("#### Practice questions")
-                questions = pack.get("practice_questions", [])
-                answers = pack.get("answers", [])
-                for index, question_text in enumerate(questions):
-                    with st.expander(f"Question {index + 1}: {question_text}"):
-                        if index < len(answers):
-                            st.write(answers[index])
-                st.markdown("#### AI flashcards")
-                for card_index, card in enumerate(pack.get("flashcards", []), start=1):
-                    with st.expander(f"Flashcard {card_index}: {card.get('question', 'Question')}"):
-                        st.write(card.get("answer", "Answer unavailable."))
-                st.markdown("#### 7-day study plan")
-                for day_index, task in enumerate(pack.get("seven_day_plan", []), start=1):
-                    st.write(f"**Day {day_index}:** {task}")
-            except Exception:
-                st.warning("Gemini returned a response that could not be formatted. Try generating the pack again later.")
-        else:
-            st.info(result.get("text", "AI is temporarily unavailable."))
-            st.caption("Built-in recommendations, quizzes, resources, and flashcards remain available without Gemini.")
-    if not GEMINI_API_KEY:
-        st.info("Gemini is not configured yet. Add GEMINI_API_KEY in your Render environment variables to enable AI generation.")
-
 # -------------------- Study Assistant --------------------
 elif page == "Study Assistant":
-    heading("🤖 Study Assistant", "Ask a question about your subject, learning goal, study progress, or a difficult concept.")
-    question = st.text_area("What would you like help with?", placeholder="For example: Explain loops simply, what should I study next, or how can I improve my quiz score?")
-    if st.button("Get AI study guidance", type="primary"):
-        cleaned_question = question.strip()
-        if cleaned_question:
-            next_topic, advice = next_recommendation()
-            latest_score = st.session_state.quiz_results.get(subject)
-            context = f"Student subject: {subject}. Level: {level}. Goal: {goal}. Next recommended topic: {next_topic}. Recommendation: {advice}. Latest quiz score: {latest_score if latest_score is not None else 'not taken'}/10."
-            prompt = f"You are a friendly, accurate tutor in LearnWise AI. Explain simply, use short steps and a small example when useful. Do not invent the student's progress. {context}\nStudent question: {cleaned_question}"
-            assistant_key = f"{subject}|{level}|{goal}|{cleaned_question.lower()}"
-            st.session_state.study_assistant_question = cleaned_question
-            st.session_state.study_assistant_result = generate_ai_text(prompt, assistant_key)
-        else:
-            st.warning("Please type a question first.")
-    assistant_result = st.session_state.get("study_assistant_result")
-    if st.session_state.study_assistant_question and assistant_result:
+    heading("🤖 Study Assistant", "A built-in study guide using your selected subject, level, goal, and recorded progress.")
+    question = st.text_area("What would you like help with?", placeholder="For example: What should I study next? How can I improve my quiz score?")
+    if st.button("Get study guidance"):
+        st.session_state.study_assistant_question = question.strip()
+    if st.session_state.study_assistant_question:
+        q = st.session_state.study_assistant_question.lower()
+        next_topic, advice = next_recommendation()
+        latest_score = st.session_state.quiz_results.get(subject)
         st.markdown("### Your study guidance")
-        if assistant_result.get("ok"):
-            st.markdown(assistant_result["text"])
+        if any(word in q for word in ["next", "recommend", "study", "topic"]):
+            st.info(f"**Suggested next topic: {next_topic}**\n\n{advice}\n\nYour goal is **{goal}**, so use the matching approach: " +
+                    ("summarize the concept and examples." if goal == "Theory" else
+                     "solve a few focused exercises." if goal == "Coding Practice" else
+                     "build a small project feature."))
+        elif any(word in q for word in ["score", "quiz", "improve", "weak"]):
+            if latest_score is None:
+                st.info("Take a quiz first. Your score and explanations will help personalize the next recommendation.")
+            elif latest_score < 5:
+                st.warning(f"Your latest {subject} score is {latest_score}/10. Revisit foundational topics, review each explanation, and retry after practice.")
+            elif latest_score < 8:
+                st.info(f"Your latest {subject} score is {latest_score}/10. Review missed answers and complete a short practice session.")
+            else:
+                st.success(f"Your latest {subject} score is {latest_score}/10. Try the next roadmap topic or a small challenge.")
+        elif any(word in q for word in ["resource", "link", "learn"]):
+            st.write("Here are resources for your selected subject:")
+            for title, url in RESOURCES[subject]:
+                st.markdown(f"- [{title}]({url})")
         else:
-            st.info(assistant_result.get("text", "Gemini is unavailable right now."))
-            next_topic, advice = next_recommendation()
-            st.markdown(f"**Built-in recommendation:** Start with **{next_topic}**. {advice}")
-            latest_score = st.session_state.quiz_results.get(subject)
-            if latest_score is not None:
-                st.caption(f"Your latest {subject} quiz score is {latest_score}/10.")
-    if not GEMINI_API_KEY:
-        st.caption("Gemini is not configured. The built-in recommendation fallback still works; add GEMINI_API_KEY in Render to enable AI answers.")
+            st.write(f"For **{subject} ({level})**, start with **{next_topic}**. {advice}")
+            st.caption("This built-in assistant uses simple rules; it is not connected to a live generative AI model.")
 
 # -------------------- My Progress --------------------
 elif page == "My Progress":
