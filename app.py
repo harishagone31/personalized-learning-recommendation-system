@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
-from supabase import create_client
+
 # ------------------------------------------------------------
 # LearnWise AI - Personalized Learning Recommendation System
 # Existing features preserved + revision and progress features
@@ -14,19 +14,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-# Supabase connection
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-if (
-    "access_token" in st.session_state
-    and "refresh_token" in st.session_state
-):
-    supabase.auth.set_session(
-        st.session_state.access_token,
-        st.session_state.refresh_token
-    )
 
 # -------------------- Theme --------------------
 st.markdown("""
@@ -117,6 +104,54 @@ QUIZZES = {
         ("Which structure represents relationships as vertices and edges?", ["Stack", "Queue", "Graph", "Array"], 2, "Graphs model vertices connected by edges."),
         ("Binary search requires data to be…", ["random", "sorted", "unique", "reversed"], 1, "Binary search relies on sorted order."),
     ],
+    "DBMS": [
+        ("What does DBMS stand for?", ["Data Backup Management System", "Database Management System", "Digital Base Management System", "Data Building Machine System"], 1, "DBMS stands for Database Management System."),
+        ("Which language is commonly used to query relational databases?", ["HTML", "CSS", "SQL", "Python"], 2, "SQL is used to query and manage relational databases."),
+        ("Which key uniquely identifies each row in a table?", ["Foreign key", "Primary key", "Candidate value", "Duplicate key"], 1, "A primary key uniquely identifies each row."),
+        ("What does a foreign key do?", ["Deletes a table", "Links tables", "Sorts rows", "Creates a database"], 1, "A foreign key references a key in another table."),
+        ("Which command retrieves data from a table?", ["GET", "OPEN", "SELECT", "FETCHTABLE"], 2, "SELECT retrieves data from a table."),
+        ("Which command removes all rows but keeps the table structure?", ["DROP", "TRUNCATE", "ALTER", "CREATE"], 1, "TRUNCATE removes all rows while keeping the table structure."),
+        ("What is normalization mainly used for?", ["Increasing duplicates", "Reducing data redundancy", "Deleting databases", "Encrypting passwords"], 1, "Normalization organizes data to reduce redundancy and update problems."),
+        ("Which ACID property means a transaction is all-or-nothing?", ["Consistency", "Isolation", "Atomicity", "Durability"], 2, "Atomicity means a transaction completes fully or not at all."),
+        ("Which clause filters rows?", ["ORDER BY", "WHERE", "GROUP BY", "SELECT"], 1, "WHERE filters rows based on a condition."),
+        ("Which command changes the structure of an existing table?", ["ALTER", "INSERT", "SELECT", "COMMIT"], 0, "ALTER changes a table's structure."),
+    ],
+    "DLD": [
+        ("What does DLD stand for?", ["Digital Logic Design", "Data Link Design", "Digital Language Development", "Direct Logic Data"], 0, "DLD stands for Digital Logic Design."),
+        ("Which number system uses only 0 and 1?", ["Decimal", "Octal", "Binary", "Hexadecimal"], 2, "The binary number system uses 0 and 1."),
+        ("How many inputs does a NOT gate have?", ["One", "Two", "Three", "Four"], 0, "A NOT gate has one input and produces its complement."),
+        ("What is the output of an AND gate when both inputs are 1?", ["0", "1", "Undefined", "High impedance"], 1, "An AND gate outputs 1 only when both inputs are 1."),
+        ("Which gate gives the complement of an OR operation?", ["AND", "XOR", "NOR", "NAND"], 2, "A NOR gate is the complement of an OR gate."),
+        ("How many select lines are needed for a 4-to-1 multiplexer?", ["1", "2", "3", "4"], 1, "A 4-to-1 multiplexer needs 2 select lines."),
+        ("Which circuit converts binary information into one of many output lines?", ["Encoder", "Decoder", "Adder", "Flip-flop"], 1, "A decoder activates an output based on its binary input."),
+        ("Which flip-flop is commonly used to store one bit?", ["D flip-flop", "Half adder", "Multiplexer", "Decoder"], 0, "A flip-flop stores one bit of information."),
+        ("A half adder adds how many single-bit inputs?", ["One", "Two", "Three", "Four"], 1, "A half adder adds two single-bit inputs."),
+        ("Which circuit is used to remember a state?", ["Combinational circuit", "Sequential circuit", "Encoder only", "Comparator only"], 1, "Sequential circuits use memory elements and depend on previous state."),
+    ],
+    "DMS": [
+        ("What does DMS commonly stand for in computer science courses?", ["Discrete Mathematical Structures", "Digital Memory System", "Data Management Software", "Direct Mathematical Science"], 0, "DMS stands for Discrete Mathematical Structures."),
+        ("A statement in logic is a sentence that is…", ["Always a question", "Either true or false", "Always true", "Always false"], 1, "A proposition has a truth value: true or false."),
+        ("What is the negation of a true proposition?", ["True", "False", "Unknown", "Both"], 1, "Negation reverses the truth value."),
+        ("Which symbol commonly represents logical AND?", ["∨", "¬", "∧", "→"], 2, "The symbol ∧ represents logical AND."),
+        ("A set is a collection of…", ["Ordered instructions", "Distinct objects", "Only numbers", "Repeated values only"], 1, "A set is a well-defined collection of distinct elements."),
+        ("If A = {1, 2} and B = {2, 3}, what is A ∩ B?", ["{1, 3}", "{1, 2, 3}", "{2}", "∅"], 2, "The intersection contains elements common to both sets."),
+        ("A relation from set A to set B is a subset of…", ["A ∪ B", "A × B", "A ∩ B", "B × B only"], 1, "A relation from A to B is a subset of the Cartesian product A × B."),
+        ("Which property means a relation relates every element to itself?", ["Symmetric", "Transitive", "Reflexive", "Antisymmetric"], 2, "A reflexive relation contains (a, a) for every element a."),
+        ("How many subsets does a set with 3 elements have?", ["3", "6", "8", "9"], 2, "A set with n elements has 2ⁿ subsets; 2³ = 8."),
+        ("In a simple graph, an edge connects…", ["Two vertices", "Two matrices", "Two sets only", "Two functions"], 0, "An edge connects vertices in a graph."),
+    ],
+    "Data Wrangling": [
+        ("What is data wrangling?", ["Deleting all data", "Cleaning and transforming data for analysis", "Designing a website", "Installing an operating system"], 1, "Data wrangling prepares raw data for analysis."),
+        ("Which Python library is commonly used for tabular data manipulation?", ["Pandas", "Turtle", "Pygame", "Tkinter"], 0, "Pandas provides tools for working with tabular data."),
+        ("In Pandas, which function reads a CSV file?", ["read_text()", "open_csv()", "read_csv()", "load_table()"], 2, "pandas.read_csv() loads a CSV file into a DataFrame."),
+        ("What is a missing value?", ["A value that is not present", "A duplicate row", "A column heading", "A sorted value"], 0, "A missing value is data that has not been recorded or is unavailable."),
+        ("Which Pandas method identifies missing values?", ["isnull()", "sort_values()", "rename()", "head()"], 0, "isnull() identifies missing values."),
+        ("Which method removes duplicate rows in Pandas?", ["dropna()", "drop_duplicates()", "remove_all()", "unique_rows()"], 1, "drop_duplicates() removes duplicate rows."),
+        ("What does DataFrame.head() display by default?", ["Last five rows", "First five rows", "Only column names", "All rows"], 1, "head() displays the first five rows by default."),
+        ("Why is data type conversion used?", ["To change a column's data type", "To delete a file", "To create a chart only", "To rename Python"], 0, "Type conversion changes values to an appropriate data type."),
+        ("What does merging datasets usually do?", ["Combines data using matching keys", "Deletes every column", "Sorts a single list", "Changes a file extension"], 0, "Merging combines datasets using one or more common keys."),
+        ("Why should data be validated after cleaning?", ["To make the file larger", "To check that the data is accurate and consistent", "To remove all columns", "To hide missing values"], 1, "Validation checks that cleaning produced reliable, consistent data."),
+    ],
     "Artificial Intelligence": [
         ("AI stands for…", ["Automated Internet", "Artificial Intelligence", "Advanced Interface", "Applied Input"], 1, "AI means Artificial Intelligence."),
         ("Which is a machine learning type?", ["Supervised learning", "Manual typing", "Formatting", "Compilation"], 0, "Supervised learning uses labeled examples."),
@@ -146,6 +181,26 @@ TOPICS = {
         "Intermediate": ["Trees", "Binary search trees", "Hash tables", "Recursion", "Sorting", "Graphs"],
         "Advanced": ["Heaps", "Tries", "Balanced trees", "Graph algorithms", "Complexity analysis", "Dynamic programming"],
     },
+    "DBMS": {
+        "Beginner": ["Introduction to DBMS", "Database concepts and schemas", "Relational model and tables", "Keys and constraints", "Basic SQL queries", "SQL filtering and sorting", "SQL aggregate functions", "Joins basics"],
+        "Intermediate": ["ER diagrams", "Relational algebra", "Normalization (1NF–3NF)", "Subqueries", "Advanced joins", "Views and indexes", "Transactions and ACID properties", "Concurrency control"],
+        "Advanced": ["Query processing and optimization", "Indexing structures", "Transaction recovery", "Database security", "Distributed databases", "NoSQL fundamentals"],
+    },
+    "DLD": {
+        "Beginner": ["Number systems", "Binary conversions", "Logic gates", "Boolean algebra basics", "Boolean expressions", "Truth tables", "K-map basics", "Combinational circuit basics"],
+        "Intermediate": ["K-map simplification", "Half and full adders", "Subtractors", "Multiplexers and demultiplexers", "Encoders and decoders", "Comparators", "Latches and flip-flops", "Counters and registers"],
+        "Advanced": ["Sequential circuit design", "Finite state machines", "Register transfer concepts", "Synchronous and asynchronous counters", "Memory basics", "Programmable logic devices"],
+    },
+    "DMS": {
+        "Beginner": ["Introduction to discrete mathematics", "Propositions and logical connectives", "Truth tables", "Logical equivalence", "Predicates and quantifiers", "Set theory", "Set operations", "Cartesian products"],
+        "Intermediate": ["Relations and their properties", "Equivalence relations", "Partial orders", "Functions and types", "Mathematical induction", "Counting principles", "Permutations and combinations", "Pigeonhole principle"],
+        "Advanced": ["Recurrence relations", "Generating functions", "Graph theory basics", "Trees and spanning trees", "Boolean algebra", "Algebraic structures"],
+    },
+    "Data Wrangling": {
+        "Beginner": ["Introduction to data wrangling", "Understanding datasets", "Python and Pandas basics", "Loading CSV and Excel files", "Inspecting rows and columns", "Selecting and filtering data", "Handling missing values", "Finding duplicate records"],
+        "Intermediate": ["Data type conversion", "Renaming columns", "String cleaning", "Combining datasets", "Merging and joining DataFrames", "Grouping and aggregation", "Reshaping data", "Date and time cleaning"],
+        "Advanced": ["Outlier detection and treatment", "Data validation", "Complex transformation pipelines", "Working with large datasets", "Data quality checks", "Preparing data for machine learning"],
+    },
     "Artificial Intelligence": {
         "Beginner": ["What is AI?", "Data and datasets", "Machine learning basics", "Supervised learning", "Unsupervised learning", "AI applications"],
         "Intermediate": ["Model training", "Classification", "Regression", "Neural networks", "NLP basics", "Model evaluation"],
@@ -168,6 +223,26 @@ RESOURCES = {
         ("GeeksforGeeks Data Structures", "https://www.geeksforgeeks.org/data-structures/"),
         ("VisuAlgo", "https://visualgo.net/en"),
         ("Programiz Data Structures", "https://www.programiz.com/dsa"),
+    ],
+    "DBMS": [
+        ("W3Schools SQL Tutorial", "https://www.w3schools.com/sql/"),
+        ("SQLBolt interactive lessons", "https://sqlbolt.com/"),
+        ("GeeksforGeeks DBMS", "https://www.geeksforgeeks.org/dbms/"),
+    ],
+    "DLD": [
+        ("All About Circuits – Digital", "https://www.allaboutcircuits.com/textbook/digital/"),
+        ("Electronics Tutorials – Digital Circuits", "https://www.electronics-tutorials.ws/"),
+        ("GeeksforGeeks Digital Electronics", "https://www.geeksforgeeks.org/digital-electronics-logic-design/"),
+    ],
+    "DMS": [
+        ("OpenStax – Discrete Mathematics resources", "https://openstax.org/subjects/math"),
+        ("MIT OpenCourseWare – Mathematics", "https://ocw.mit.edu/search/?q=discrete%20mathematics"),
+        ("GeeksforGeeks Discrete Mathematics", "https://www.geeksforgeeks.org/discrete-mathematics/"),
+    ],
+    "Data Wrangling": [
+        ("Pandas getting started", "https://pandas.pydata.org/docs/getting_started/"),
+        ("Kaggle Pandas course", "https://www.kaggle.com/learn/pandas"),
+        ("Real Python – Pandas", "https://realpython.com/learning-paths/pandas-data-science/"),
     ],
     "Artificial Intelligence": [
         ("Google Machine Learning Crash Course", "https://developers.google.com/machine-learning/crash-course"),
@@ -204,6 +279,38 @@ FLASHCARDS = {
         ("What does binary search require?", "Sorted data."),
         ("What is a tree root?", "The topmost node."),
     ],
+    "DBMS": [
+        ("What is a DBMS?", "Software used to create, manage, and access databases."),
+        ("What is a primary key?", "A column or set of columns that uniquely identifies a row."),
+        ("What is a foreign key?", "A field that references a key in another table."),
+        ("What does SELECT do?", "Retrieves data from a table."),
+        ("What is normalization?", "Organizing tables to reduce redundancy and anomalies."),
+        ("What does ACID stand for?", "Atomicity, Consistency, Isolation, and Durability."),
+    ],
+    "DLD": [
+        ("What is a logic gate?", "An electronic circuit that performs a logical operation."),
+        ("What is a truth table?", "A table showing outputs for every possible input combination."),
+        ("What does a NOT gate do?", "It produces the complement of its input."),
+        ("What is a multiplexer?", "A circuit that selects one of several inputs."),
+        ("What is a flip-flop?", "A sequential circuit that stores one bit."),
+        ("What does a half adder produce?", "Sum and carry outputs for two input bits."),
+    ],
+    "DMS": [
+        ("What is a proposition?", "A statement that is either true or false."),
+        ("What is a set?", "A well-defined collection of distinct elements."),
+        ("What is a union?", "The set of elements that belong to either of the sets."),
+        ("What is an intersection?", "The set of elements common to the sets."),
+        ("What is a reflexive relation?", "A relation containing (a, a) for every element a."),
+        ("How many subsets does an n-element set have?", "2 to the power n subsets."),
+    ],
+    "Data Wrangling": [
+        ("What is data wrangling?", "Cleaning and transforming raw data into a useful format."),
+        ("What is a DataFrame?", "A two-dimensional labeled data structure in Pandas."),
+        ("Which Pandas function reads CSV files?", "pd.read_csv()."),
+        ("What does isnull() do?", "Identifies missing values."),
+        ("What does drop_duplicates() do?", "Removes duplicate rows."),
+        ("Why validate cleaned data?", "To check its accuracy, consistency, and quality."),
+    ],
     "Artificial Intelligence": [
         ("What does AI stand for?", "Artificial Intelligence."),
         ("What is a dataset?", "An organized collection of data."),
@@ -225,50 +332,6 @@ defaults = {
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
-        # Login and Signup
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-if st.session_state.user is None:
-    st.title("🧠 LearnWise AI")
-    st.subheader("Login or Create an Account")
-
-    auth_option = st.radio(
-        "Choose an option",
-        ["Login", "Sign Up"],
-        horizontal=True
-    )
-
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-
-    if auth_option == "Sign Up":
-        if st.button("Create Account"):
-            try:
-                response = supabase.auth.sign_up({
-                    "email": email,
-                    "password": password
-                })
-                st.success("Account created! Please check your email.")
-            except Exception as e:
-                st.error(str(e))
-
-    else:
-        if st.button("Login"):
-            try:
-                response = supabase.auth.sign_in_with_password({
-                    "email": email,
-                    "password": password
-                })
-                st.session_state.user = response.user
-                st.session_state.access_token = response.session.access_token
-                st.session_state.refresh_token = response.session.refresh_token
-                st.success("Login successful!")
-                st.rerun()
-            except Exception as e:
-                st.error("Login failed. Check your email and password.")
-
-    st.stop()
 
 # -------------------- Sidebar --------------------
 with st.sidebar:
@@ -288,12 +351,6 @@ with st.sidebar:
     st.session_state.level = st.selectbox("Current level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(st.session_state.level))
     st.session_state.goal = st.selectbox("Learning goal", ["Theory", "Coding Practice", "Projects"], index=["Theory", "Coding Practice", "Projects"].index(st.session_state.goal))
     st.markdown("<div class='small-muted'>Prototype • Session-based progress</div>", unsafe_allow_html=True)
-    st.markdown("---")
-
-    if st.button("Logout"):
-        supabase.auth.sign_out()
-        st.session_state.user = None
-        st.rerun()
 
 name = st.session_state.student_name.strip() or "Learner"
 subject, level, goal = st.session_state.subject, st.session_state.level, st.session_state.goal
@@ -339,7 +396,7 @@ def next_recommendation():
                 return topic, "Your check-in is strong. Mark this topic complete and continue."
             return topic, "Start here, then complete a short practice session."
     return "Review your completed topics", "You have completed this level's roadmap. Try a challenge or review."
-    # -------------------- Dashboard --------------------
+# -------------------- Dashboard --------------------
 if page == "Dashboard":
     st.markdown(f"""
     <div class="hero">
@@ -445,24 +502,6 @@ elif page == "Learning Recommendations":
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
     daily_topics = TOPICS[subject][level]
-    # Load saved weekly progress once
-    if "planner_loaded" not in st.session_state:
-        user_id = st.session_state.user.id
-
-        saved_progress = (
-            supabase.table("weekly_progress")
-            .select("completed_days")
-            .eq("user_id", user_id)
-            .execute()
-        )
-
-        saved_days = saved_progress.data[0]["completed_days"] if saved_progress.data else []
-
-        for day_num in range(1, 8):
-            day_key = planner_key(day_num, "done")
-            st.session_state[day_key] = day_num in saved_days
-
-        st.session_state.planner_loaded = True
     for day_num in range(1, 8):
         topic = daily_topics[(day_num - 1) % len(daily_topics)]
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -473,35 +512,9 @@ elif page == "Study Planner":
         with col2:
             st.checkbox("Complete", key=planner_key(day_num, "done"))
         st.markdown("</div>", unsafe_allow_html=True)
-        
-
     completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
     st.progress(completed_days / 7)
     st.caption(f"Weekly plan progress: {completed_days}/7 days.")
-    checked_days = [
-        day_num
-        for day_num in range(1, 8)
-        if st.session_state.get(planner_key(day_num, "done"), False)
-    ]
-
-    user_id = st.session_state.user.id
-
-    saved_progress = (
-        supabase.table("weekly_progress")
-        .select("user_id")
-        .eq("user_id", user_id)
-        .execute()
-    )
-
-    if saved_progress.data:
-        supabase.table("weekly_progress").update({
-            "completed_days": checked_days
-        }).eq("user_id", user_id).execute()
-    else:
-        supabase.table("weekly_progress").insert({
-            "user_id": user_id,
-            "completed_days": checked_days
-        }).execute()
     for day_num in range(1, 8):
         st.session_state.planner_checks[planner_key(day_num, "done")] = st.session_state.get(planner_key(day_num, "done"), False)
 
