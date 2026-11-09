@@ -785,17 +785,19 @@ if not topics:
             st.info(f"You scored {score}/10 in **{assessment['topic']}**. Review key points and practice a little more.")
         if level == "Beginner":
             st.markdown("**Beginner-friendly resources:**")
+
         resource_items = RESOURCES.get(subject, [])
 
-if resource_items:
-    for resource_title, resource_url in resource_items[:2]:
-        st.markdown(f"- [{resource_title}]({resource_url})")
-else:
-    search_url = "https://www.google.com/search?q=" + quote_plus(
-        f"{subject} {level} learning resources"
-    )
-    st.markdown(f"- [Find {subject} learning resources]({search_url})")
-st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
+        if resource_items:
+            for resource_title, resource_url in resource_items[:2]:
+                st.markdown(f"- [{resource_title}]({resource_url})")
+        else:
+            search_url = "https://www.google.com/search?q=" + quote_plus(
+                f"{subject} {level} learning resources"
+            )
+            st.markdown(f"- [Find {subject} learning resources]({search_url})")
+
+        st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
 # -------------------- Learning Recommendations --------------------
 elif page == "Learning Recommendations":
 
