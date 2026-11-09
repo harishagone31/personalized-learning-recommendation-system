@@ -489,11 +489,7 @@ def next_recommendation():
             return topic, "Start here, then complete a short practice session."
     return "Review your completed topics", "You have completed this level's roadmap. Try a challenge or review."
 
-# -------------------- Learning Recommendations --------------------
-elif page == "Learning Recommendations":
-    heading("🧠 Learning Recommendations", "A roadmap tailored to your subject, level, goal, and recent check-ins.")
-    st.markdown(f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>", unsafe_allow_html=True)
-    topics = TOPICS[subject][level]# -------------------- Dashboard --------------------
+# -------------------- Dashboard --------------------
 if page == "Dashboard":
     st.markdown(f"""
     <div class="hero">
@@ -589,7 +585,28 @@ if page == "Dashboard":
             st.markdown("**Beginner-friendly resources:**")
             for resource_title, resource_url in RESOURCES[subject][:2]:
                 st.markdown(f"- [{resource_title}]({resource_url})")
-        st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
+                st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
+
+# -------------------- Learning Recommendations --------------------
+elif page == "Learning Recommendations":
+
+    heading("🧠 Learning Recommendations", "A roadmap tailored to your subject, level, goal, and recent check-ins.")
+    st.markdown(f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>", unsafe_allow_html=True)
+    topics = TOPICS[subject][level]
+
+    for index, topic in enumerate(topics, start=1):
+        is_done = topic_key(topic) in st.session_state.completed_topics
+        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            st.markdown(f"**{index:02d} · {topic}**")
+        with col2:
+            checked = st.checkbox("Done", value=is_done, key=f"topic_check_{subject}_{level}_{index}")
+            if checked:
+                st.session_state.completed_topics.add(topic_key(topic))
+            else:
+                st.session_state.completed_topics.discard(topic_key(topic))
+        st.markdown("</div>", unsafe_allow_html=True)
         # -------------------- Study Planner --------------------
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
@@ -603,12 +620,13 @@ elif page == "Study Planner":
             st.caption("Suggested session: 25 minutes learning + 15 minutes practice + 5 minutes recap.")
         with col2:
             st.checkbox(
-    "Complete",
-    value=st.session_state.planner_checks.get(
-        planner_key(day_num, "done"), False
-    ),
-    key=planner_key(day_num, "done")
-)
+                "Complete",
+                value=st.session_state.planner_checks.get(
+                    planner_key(day_num, "done"), False
+                ),
+                key=planner_key(day_num, "done")
+            )
+
         st.markdown("</div>", unsafe_allow_html=True)
     completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
     st.progress(completed_days / 7)
@@ -625,7 +643,7 @@ elif page == "Study Planner":
         st.session_state.daily_logs[today_key] = int(logged_minutes)
         st.success("Today's study time saved!")
         st.rerun()
-    st.caption(f"Current streak: {get_streak()} day(s) 🔥. Study time is stored for this session.")
+st.caption(f"Current streak: {get_streak()} day(s) 🔥. Your study time is saved.")
     try:
         supabase.table("learning_progress").upsert({
             "user_id": st.session_state.user.id,
