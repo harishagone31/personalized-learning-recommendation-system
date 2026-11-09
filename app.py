@@ -699,7 +699,10 @@ elif page == "Study Planner":
         for i in range(1, 8)
     )
     st.progress(completed_days / 7)
-    st.success(f"You have completed {completed_days} out of 7 study days.") if completed_days == 7 else st.info(f"{7 - completed_days} study day(s) remaining.")
+if completed_days == 7:
+    st.success(f"You have completed {completed_days} out of 7 study days.")
+else:
+    st.info(f"{7 - completed_days} study day(s) remaining.")
 
     st.markdown("### ⏱️ Daily study goal")
     st.session_state.daily_goal_minutes = st.slider(
