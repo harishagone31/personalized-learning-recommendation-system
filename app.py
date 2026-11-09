@@ -722,6 +722,14 @@ elif page == "Practice Quiz":
             "date": date.today().isoformat(), "subject": quiz_subject,
             "score": score, "out_of": 10,
         })
+        try:
+            supabase.table("learning_progress").upsert({
+                "user_id": st.session_state.user.id,
+                "quiz_results": st.session_state.quiz_results,
+                "quiz_history": st.session_state.quiz_history
+            }, on_conflict="user_id").execute()
+        except Exception as e:
+            st.error(f"Could not save quiz result: {e}")
         st.rerun()
     if st.session_state.quiz_submissions.get(quiz_subject, False):
         score = st.session_state.quiz_results.get(quiz_subject, 0)
