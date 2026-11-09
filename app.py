@@ -590,8 +590,7 @@ if page == "Dashboard":
             for resource_title, resource_url in RESOURCES[subject][:2]:
                 st.markdown(f"- [{resource_title}]({resource_url})")
                 st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
-
-# -------------------- Learning Recommendations --------------------
+                # -------------------- Learning Recommendations --------------------
 elif page == "Learning Recommendations":
 
     heading("🧠 Learning Recommendations", "A roadmap tailored to your subject, level, goal, and recent check-ins.")
@@ -611,6 +610,23 @@ elif page == "Learning Recommendations":
             else:
                 st.session_state.completed_topics.discard(topic_key(topic))
         st.markdown("</div>", unsafe_allow_html=True)
+
+    try:
+        supabase.table("learning_progress").upsert({
+            "user_id": st.session_state.user.id,
+            "planner_checks": st.session_state.planner_checks,
+            "daily_goal_minutes": int(st.session_state.daily_goal_minutes),
+            "daily_logs": st.session_state.daily_logs,
+            "completed_topics": list(st.session_state.completed_topics),
+            "quiz_results": st.session_state.quiz_results,
+            "quiz_history": st.session_state.quiz_history,
+            "topic_attempts": st.session_state.topic_attempts
+        }, on_conflict="user_id").execute()
+
+    except Exception as e:
+        st.error(f"Could not save progress: {e}")
+
+
         # -------------------- Study Planner --------------------
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
