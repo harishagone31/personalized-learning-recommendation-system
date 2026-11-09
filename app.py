@@ -796,73 +796,89 @@ else:
     )
     st.markdown(f"- [Find {subject} learning resources]({search_url})")
 st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
-                # -------------------- Learning Recommendations --------------------
+# -------------------- Learning Recommendations --------------------
 elif page == "Learning Recommendations":
 
     heading("🧠 Learning Recommendations", "A roadmap tailored to your subject, level, goal, and recent check-ins.")
-    st.markdown(f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>", unsafe_allow_html=True)
+
+    st.markdown(
+        f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>",
+        unsafe_allow_html=True
+    )
+
     content = get_ai_learning_content(subject, level, goal)
 
-topics = (
-    content["topics"]
-    if content
-    else TOPICS.get(subject, {}).get(level, [])
-)
+    topics = (
+        content["topics"]
+        if content
+        else TOPICS.get(subject, {}).get(level, [])
+    )
 
-if not topics:
-    st.warning("No learning topics available. Please try again.")
+    if not topics:
+        st.warning("No learning topics available. Please try again.")
 
-    for index, topic in enumerate(topics, start=1):
-        is_done = topic_key(topic) in st.session_state.completed_topics
-        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-        col1, col2 = st.columns([5, 1])
-        with col1:
-            st.markdown(f"**{index:02d} · {topic}**")
-        with col2:
-            checked = st.checkbox("Done", value=is_done, key=f"topic_check_{subject}_{level}_{index}")
-            if checked:
-                st.session_state.completed_topics.add(topic_key(topic))
-            else:
-                st.session_state.completed_topics.discard(topic_key(topic))
-        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        for index, topic in enumerate(topics, start=1):
+            is_done = topic_key(topic) in st.session_state.completed_topics
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            col1, col2 = st.columns([5, 1])
 
-    try:
-        supabase.table("learning_progress").upsert({
-            "user_id": st.session_state.user.id,
-            "planner_checks": st.session_state.planner_checks,
-            "daily_goal_minutes": int(st.session_state.daily_goal_minutes),
-            "daily_logs": st.session_state.daily_logs,
-            "completed_topics": list(st.session_state.completed_topics),
-            "quiz_results": st.session_state.quiz_results,
-            "quiz_history": st.session_state.quiz_history,
-            "topic_attempts": st.session_state.topic_attempts
-        }, on_conflict="user_id").execute()
+            with col1:
+                st.markdown(f"**{index:02d} · {topic}**")
 
-    except Exception as e:
-        st.error(f"Could not save progress: {e}")
+            with col2:
+                checked = st.checkbox(
+                    "Done",
+                    value=is_done,
+                    key=f"topic_check_{subject}_{level}_{index}"
+                )
 
+                if checked:
+                    st.session_state.completed_topics.add(topic_key(topic))
+                else:
+                    st.session_state.completed_topics.discard(topic_key(topic))
 
-        # -------------------- Study Planner --------------------
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        try:
+            supabase.table("learning_progress").upsert({
+                "user_id": st.session_state.user.id,
+                "planner_checks": st.session_state.planner_checks,
+                "daily_goal_minutes": int(st.session_state.daily_goal_minutes),
+                "daily_logs": st.session_state.daily_logs,
+                "completed_topics": list(st.session_state.completed_topics),
+                "quiz_results": st.session_state.quiz_results,
+                "quiz_history": st.session_state.quiz_history,
+                "topic_attempts": st.session_state.topic_attempts
+            }, on_conflict="user_id").execute()
+
+        except Exception as e:
+            st.error(f"Could not save progress: {e}")
+# -------------------- Study Planner --------------------
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
+
     content = get_ai_learning_content(subject, level, goal)
 
-daily_topics = (
-    content["topics"]
-    if content
-    else TOPICS.get(subject, {}).get(level, [])
-)
+    daily_topics = (
+        content["topics"]
+        if content
+        else TOPICS.get(subject, {}).get(level, [])
+    )
 
-if not daily_topics:
-    st.warning("No study topics available. Please try again.")
-    st.stop()
+    if not daily_topics:
+        st.warning("No study topics available. Please try again.")
+        st.stop()
+
     for day_num in range(1, 8):
         topic = daily_topics[(day_num - 1) % len(daily_topics)]
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
         col1, col2 = st.columns([5, 1])
+
         with col1:
             st.markdown(f"**Day {day_num} · {topic}**")
             st.caption("Suggested session: 25 minutes learning + 15 minutes practice + 5 minutes recap.")
+
         with col2:
             st.checkbox(
                 "Complete",
@@ -873,17 +889,39 @@ if not daily_topics:
             )
 
         st.markdown("</div>", unsafe_allow_html=True)
-    completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
+
+    completed_days = sum(
+        bool(st.session_state.get(planner_key(i, "done"), False))
+        for i in range(1, 8)
+    )
+
     st.progress(completed_days / 7)
     st.caption(f"Weekly plan progress: {completed_days}/7 days.")
+
     for day_num in range(1, 8):
-        st.session_state.planner_checks[planner_key(day_num, "done")] = st.session_state.get(planner_key(day_num, "done"), False)
+        st.session_state.planner_checks[planner_key(day_num, "done")] = (
+            st.session_state.get(planner_key(day_num, "done"), False)
+        )
 
     st.markdown("### ⏱️ Daily study goal")
-    st.session_state.daily_goal_minutes = st.slider("Daily goal (minutes)", 10, 180, int(st.session_state.daily_goal_minutes), 5)
+
+    st.session_state.daily_goal_minutes = st.slider(
+        "Daily goal (minutes)",
+        10, 180,
+        int(st.session_state.daily_goal_minutes),
+        5
+    )
+
     today_key = date.today().isoformat()
     current_minutes = int(st.session_state.daily_logs.get(today_key, 0))
-    logged_minutes = st.number_input("Minutes studied today", min_value=0, max_value=600, value=current_minutes, step=5)
+
+    logged_minutes = st.number_input(
+        "Minutes studied today",
+        min_value=0,
+        max_value=600,
+        value=current_minutes,
+        step=5
+    )
 
     if st.button("Save today's study time"):
         st.session_state.daily_logs[today_key] = int(logged_minutes)
@@ -906,8 +944,6 @@ if not daily_topics:
 
     except Exception as e:
         st.error(f"Could not save progress: {e}")
-    
-
 
 # -------------------- Learning Resources --------------------
 elif page == "Learning Resources":
