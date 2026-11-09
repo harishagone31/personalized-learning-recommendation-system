@@ -562,8 +562,7 @@ with st.sidebar:
     st.session_state.student_name = st.text_input(
         "Your name", st.session_state.student_name
     )
-
-subject_options = list(TOPICS.keys()) + ["Other (Enter your own)"]
+    subject_options = list(TOPICS.keys()) + ["Other (Enter your own)"]
 
     if "subject_selector" not in st.session_state:
         st.session_state.subject_selector = (
