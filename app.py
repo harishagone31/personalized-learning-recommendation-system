@@ -397,7 +397,7 @@ defaults = {
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
-        # -------------------- Load saved learning progress --------------------
+# -------------------- Load saved learning progress --------------------
 
 if st.session_state.user is not None:
     user_id = st.session_state.user.id
@@ -705,6 +705,7 @@ elif page == "Practice Quiz":
             answer = st.radio(f"Select an answer for question {i+1}", options, index=None,
                               key=f"{quiz_subject}_answer_{i}", label_visibility="collapsed")
             answers.append(answer)
+            st.write("DEBUG ANSWERS:",answers)
         submit = st.form_submit_button("🚀 Submit Quiz")
     if submit:
         score, chosen_indices = 0, []
