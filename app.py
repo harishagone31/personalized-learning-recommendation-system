@@ -2,10 +2,16 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
+import os
+
+try:
+    from supabase import create_client
+except Exception:
+    create_client = None
 
 # ------------------------------------------------------------
 # LearnWise AI - Personalized Learning Recommendation System
-# Existing features preserved + revision and progress features
+# Existing features + Supabase authentication and eight fixed subjects (no Gemini AI)
 # ------------------------------------------------------------
 
 st.set_page_config(
@@ -14,6 +20,27 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# -------------------- External services --------------------
+def read_setting(name, default=""):
+    """Read a secret from environment variables or Streamlit secrets."""
+    value = os.getenv(name)
+    if value:
+        return value.strip()
+    try:
+        return str(st.secrets.get(name, default)).strip()
+    except Exception:
+        return default
+
+SUPABASE_URL = read_setting("SUPABASE_URL")
+SUPABASE_KEY = read_setting("SUPABASE_KEY")
+supabase = None
+if create_client and SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception:
+        supabase = None
+
 
 # -------------------- Theme --------------------
 st.markdown("""
@@ -327,16 +354,70 @@ defaults = {
     "quiz_results": {}, "quiz_submissions": {}, "quiz_answers": {},
     "topic_attempts": {}, "quiz_history": [], "flashcard_index": 0,
     "flashcard_revealed": False, "daily_goal_minutes": 30,
-    "daily_logs": {}, "study_assistant_question": "",
+    "daily_logs": {}, "study_assistant_question": "", "study_assistant_result": None,
+    "user": None, "access_token": "", "refresh_token": "",
+    "ai_pack_cache": {}, "ai_assistant_cache": {},
 }
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# -------------------- Sidebar --------------------
+# Keep the selector restricted to the eight supported subjects.
+# This also resets old custom values such as Physics from previous sessions.
+if st.session_state.get("subject") not in TOPICS:
+    st.session_state.subject = "Python"
+
+# Restore the Supabase session when the app reruns.
+if supabase and st.session_state.get("access_token") and st.session_state.get("refresh_token"):
+    try:
+        supabase.auth.set_session(
+            st.session_state.access_token,
+            st.session_state.refresh_token,
+        )
+    except Exception:
+        st.session_state.user = None
+        st.session_state.access_token = ""
+        st.session_state.refresh_token = ""
+
+# Login is required when Supabase credentials are configured. If they are not,
+# the app remains usable in demo mode rather than crashing during startup.
+if supabase and st.session_state.user is None:
+    st.title("🧠 LearnWise AI")
+    st.subheader("Login or create an account")
+    auth_mode = st.radio("Choose an option", ["Login", "Sign Up"], horizontal=True)
+    auth_email = st.text_input("Email address", key="auth_email")
+    auth_password = st.text_input("Password", type="password", key="auth_password")
+    if st.button("Login" if auth_mode == "Login" else "Create Account", type="primary"):
+        if not auth_email.strip() or not auth_password:
+            st.warning("Enter both your email and password.")
+        else:
+            try:
+                if auth_mode == "Sign Up":
+                    result = supabase.auth.sign_up({"email": auth_email.strip(), "password": auth_password})
+                    if getattr(result, "session", None):
+                        st.session_state.user = result.user
+                        st.session_state.access_token = result.session.access_token
+                        st.session_state.refresh_token = result.session.refresh_token
+                        st.success("Account created and signed in.")
+                    else:
+                        st.success("Account created. Check your email if confirmation is enabled, then log in.")
+                else:
+                    result = supabase.auth.sign_in_with_password({"email": auth_email.strip(), "password": auth_password})
+                    st.session_state.user = result.user
+                    st.session_state.access_token = result.session.access_token
+                    st.session_state.refresh_token = result.session.refresh_token
+                    st.success("Login successful.")
+                    st.rerun()
+            except Exception as exc:
+                st.error("Authentication failed. Check the email/password and Supabase settings.")
+                st.caption(str(exc)[:300])
+    st.stop()
+
 with st.sidebar:
     st.markdown("## 🧠 LearnWise AI")
     st.caption("Your personalized learning companion")
+    if not supabase:
+        st.caption("Demo mode · Supabase login is not configured")
     st.markdown("---")
     page = st.radio(
         "NAVIGATION",
@@ -347,10 +428,26 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 👤 Student profile")
     st.session_state.student_name = st.text_input("Your name", st.session_state.student_name)
-    st.session_state.subject = st.selectbox("Learning subject", list(TOPICS.keys()), index=list(TOPICS.keys()).index(st.session_state.subject))
+    subject_choices = list(TOPICS.keys())
+    current_subject = st.session_state.subject if st.session_state.subject in subject_choices else "Python"
+    st.session_state.subject = st.selectbox(
+        "Learning subject",
+        subject_choices,
+        index=subject_choices.index(current_subject),
+        key="learning_subject_selector",
+    )
     st.session_state.level = st.selectbox("Current level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(st.session_state.level))
     st.session_state.goal = st.selectbox("Learning goal", ["Theory", "Coding Practice", "Projects"], index=["Theory", "Coding Practice", "Projects"].index(st.session_state.goal))
     st.markdown("<div class='small-muted'>Prototype • Session-based progress</div>", unsafe_allow_html=True)
+    if supabase and st.button("Logout"):
+        try:
+            supabase.auth.sign_out()
+        except Exception:
+            pass
+        st.session_state.user = None
+        st.session_state.access_token = ""
+        st.session_state.refresh_token = ""
+        st.rerun()
 
 name = st.session_state.student_name.strip() or "Learner"
 subject, level, goal = st.session_state.subject, st.session_state.level, st.session_state.goal
@@ -502,6 +599,24 @@ elif page == "Learning Recommendations":
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", "Check off each day after your study session.")
     daily_topics = TOPICS[subject][level]
+
+    # Load the user's saved weekly checklist once per signed-in session.
+    if supabase and st.session_state.get("user") and not st.session_state.get("planner_loaded"):
+        try:
+            user_id = st.session_state.user.id
+            saved = (supabase.table("weekly_progress")
+                     .select("completed_days")
+                     .eq("user_id", user_id)
+                     .execute())
+            saved_days = saved.data[0].get("completed_days", []) if saved.data else []
+            for day_num in range(1, 8):
+                st.session_state[planner_key(day_num, "done")] = day_num in saved_days
+            st.session_state.planner_loaded = True
+        except Exception:
+            # The planner remains usable even if the optional database table is unavailable.
+            st.session_state.planner_loaded = True
+            st.info("Your planner is working in this session, but saved checklist data could not be loaded.")
+
     for day_num in range(1, 8):
         topic = daily_topics[(day_num - 1) % len(daily_topics)]
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -513,6 +628,30 @@ elif page == "Study Planner":
             st.checkbox("Complete", key=planner_key(day_num, "done"))
         st.markdown("</div>", unsafe_allow_html=True)
     completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
+
+    # Save the checklist for signed-in users; database failures never stop the app.
+    if supabase and st.session_state.get("user"):
+        try:
+            user_id = st.session_state.user.id
+            checked_days = [day_num for day_num in range(1, 8)
+                            if st.session_state.get(planner_key(day_num, "done"), False)]
+            existing = (supabase.table("weekly_progress")
+                        .select("user_id")
+                        .eq("user_id", user_id)
+                        .execute())
+            if existing.data:
+                (supabase.table("weekly_progress")
+                 .update({"completed_days": checked_days})
+                 .eq("user_id", user_id)
+                 .execute())
+            else:
+                supabase.table("weekly_progress").insert({
+                    "user_id": user_id,
+                    "completed_days": checked_days,
+                }).execute()
+        except Exception:
+            st.caption("Checklist changes are available in this session; database saving is temporarily unavailable.")
+
     st.progress(completed_days / 7)
     st.caption(f"Weekly plan progress: {completed_days}/7 days.")
     for day_num in range(1, 8):
@@ -532,7 +671,9 @@ elif page == "Study Planner":
 # -------------------- Learning Resources --------------------
 elif page == "Learning Resources":
     heading("📚 Learning Resources", "Curated resources for each subject.")
-    selected_resource_subject = st.selectbox("Choose a subject", list(RESOURCES.keys()), index=list(RESOURCES.keys()).index(subject))
+    resource_subjects = list(RESOURCES.keys())
+    default_resource_index = resource_subjects.index(subject) if subject in resource_subjects else 0
+    selected_resource_subject = st.selectbox("Choose a subject", resource_subjects, index=default_resource_index)
     st.markdown(f"<div class='hero'><div class='pill'>RESOURCE LIBRARY</div><h2>{selected_resource_subject}</h2><p>Learn concepts and practice at your own pace.</p></div>", unsafe_allow_html=True)
     for title, url in RESOURCES[selected_resource_subject]:
         st.markdown(f"<div class='glass-card'><h3>🔗 {title}</h3><p><a href='{url}' target='_blank'>{url}</a></p></div>", unsafe_allow_html=True)
@@ -619,36 +760,25 @@ elif page == "Flashcards":
 
 # -------------------- Study Assistant --------------------
 elif page == "Study Assistant":
-    heading("🤖 Study Assistant", "A built-in study guide using your selected subject, level, goal, and recorded progress.")
-    question = st.text_area("What would you like help with?", placeholder="For example: What should I study next? How can I improve my quiz score?")
-    if st.button("Get study guidance"):
-        st.session_state.study_assistant_question = question.strip()
-    if st.session_state.study_assistant_question:
-        q = st.session_state.study_assistant_question.lower()
-        next_topic, advice = next_recommendation()
-        latest_score = st.session_state.quiz_results.get(subject)
-        st.markdown("### Your study guidance")
-        if any(word in q for word in ["next", "recommend", "study", "topic"]):
-            st.info(f"**Suggested next topic: {next_topic}**\n\n{advice}\n\nYour goal is **{goal}**, so use the matching approach: " +
-                    ("summarize the concept and examples." if goal == "Theory" else
-                     "solve a few focused exercises." if goal == "Coding Practice" else
-                     "build a small project feature."))
-        elif any(word in q for word in ["score", "quiz", "improve", "weak"]):
-            if latest_score is None:
-                st.info("Take a quiz first. Your score and explanations will help personalize the next recommendation.")
-            elif latest_score < 5:
-                st.warning(f"Your latest {subject} score is {latest_score}/10. Revisit foundational topics, review each explanation, and retry after practice.")
-            elif latest_score < 8:
-                st.info(f"Your latest {subject} score is {latest_score}/10. Review missed answers and complete a short practice session.")
-            else:
-                st.success(f"Your latest {subject} score is {latest_score}/10. Try the next roadmap topic or a small challenge.")
-        elif any(word in q for word in ["resource", "link", "learn"]):
-            st.write("Here are resources for your selected subject:")
-            for title, url in RESOURCES[subject]:
-                st.markdown(f"- [{title}]({url})")
+    heading("📘 Study Assistant", "Get guidance using your selected subject, level, and learning progress.")
+    question = st.text_area(
+        "What would you like help with?",
+        placeholder="For example: What should I study next? How can I improve my quiz score?",
+    )
+    if st.button("Get study guidance", type="primary"):
+        cleaned_question = question.strip()
+        if not cleaned_question:
+            st.warning("Please type a question first.")
         else:
-            st.write(f"For **{subject} ({level})**, start with **{next_topic}**. {advice}")
-            st.caption("This built-in assistant uses simple rules; it is not connected to a live generative AI model.")
+            next_topic, advice = next_recommendation()
+            latest_score = st.session_state.quiz_results.get(subject)
+            st.markdown("### Your study guidance")
+            st.write(f"Your selected subject is **{subject}** and your current level is **{level}**.")
+            st.write(f"**Recommended next topic:** {next_topic}")
+            st.write(advice)
+            if latest_score is not None:
+                st.write(f"Your latest {subject} quiz score is **{latest_score}/10**.")
+            st.caption("This assistant uses LearnWise built-in recommendations. No Gemini API is used.")
 
 # -------------------- My Progress --------------------
 elif page == "My Progress":
