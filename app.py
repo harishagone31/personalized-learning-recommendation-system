@@ -797,7 +797,7 @@ if not topics:
             )
             st.markdown(f"- [Find {subject} learning resources]({search_url})")
 
-        st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
+        st.caption(f"Recorded check-ins for this topic: {len(attempts)}") 
 # -------------------- Learning Recommendations --------------------
 elif page == "Learning Recommendations":
 
@@ -808,14 +808,13 @@ elif page == "Learning Recommendations":
         unsafe_allow_html=True
     )
 
-    content = get_ai_learning_content(subject, level, goal)
+       content = get_ai_learning_content(subject, level, goal)
 
     topics = (
         content["topics"]
         if content
         else TOPICS.get(subject, {}).get(level, [])
     )
-
     if not topics:
         st.warning("No learning topics available. Please try again.")
 
