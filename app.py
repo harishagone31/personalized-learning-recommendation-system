@@ -692,14 +692,15 @@ elif page == "Study Planner":
                 f"Mark Day {day_num} as complete",
                 key=planner_key(day_num, "done"),
             )
-            st.session_state.planner_checks[planner_key(day_num, "done")] = is_done
+st.session_state.planner_checks[planner_key(day_num, "done")] = is_done
 
     completed_days = sum(
         bool(st.session_state.get(planner_key(i, "done"), False))
         for i in range(1, 8)
     )
     st.progress(completed_days / 7)
-if completed_days == 7:
+
+    if completed_days == 7:
         st.success(f"You have completed {completed_days} out of 7 study days.")
     else:
         st.info(f"{7 - completed_days} study day(s) remaining.")
@@ -712,7 +713,6 @@ if completed_days == 7:
         int(st.session_state.daily_goal_minutes),
         5
     )
-
     today_key = date.today().isoformat()
     current_minutes = int(st.session_state.daily_logs.get(today_key, 0))
 
