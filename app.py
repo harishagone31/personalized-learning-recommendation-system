@@ -643,7 +643,7 @@ elif page == "Study Planner":
         st.session_state.daily_logs[today_key] = int(logged_minutes)
         st.success("Today's study time saved!")
         st.rerun()
-st.caption(f"Current streak: {get_streak()} day(s) 🔥. Your study time is saved.")
+        st.caption(f"Current streak: {get_streak()} day(s) 🔥. Your study time is saved.")
     try:
         supabase.table("learning_progress").upsert({
             "user_id": st.session_state.user.id,
