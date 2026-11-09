@@ -698,27 +698,32 @@ elif page == "Study Planner":
         bool(st.session_state.get(planner_key(i, "done"), False))
         for i in range(1, 8)
     )
-    st.progress(completed_days / 7)
-if completed_days == 7:
-    st.success(f"You have completed {completed_days} out of 7 study days.")
-else:
-    st.info(f"{7 - completed_days} study day(s) remaining.")
+st.progress(completed_days / 7)
+
+    if completed_days == 7:
+        st.success(f"You have completed {completed_days} out of 7 study days.")
+    else:
+        st.info(f"{7 - completed_days} study day(s) remaining.")
 
     st.markdown("### ⏱️ Daily study goal")
     st.session_state.daily_goal_minutes = st.slider(
         "Daily goal (minutes)", 10, 180,
         int(st.session_state.daily_goal_minutes), 5
     )
+
     today_key = date.today().isoformat()
     current_minutes = int(st.session_state.daily_logs.get(today_key, 0))
+
     logged_minutes = st.number_input(
         "Minutes studied today", min_value=0, max_value=600,
         value=current_minutes, step=5
     )
+
     if st.button("Save today's study time"):
         st.session_state.daily_logs[today_key] = int(logged_minutes)
         st.success("Today's study time saved!")
         st.rerun()
+
     st.caption(f"Current streak: {get_streak()} day(s) 🔥. Study time is saved to your account when signed in.")
 
 # -------------------- Learning Resources --------------------
