@@ -651,7 +651,7 @@ elif page == "Learning Recommendations":
             for resource_title, resource_url in RESOURCES[subject][:2]:
                 st.markdown(f"- [{resource_title}]({resource_url})")
         st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
-        # -------------------- Study Planner --------------------
+# -------------------- Study Planner --------------------
 elif page == "Study Planner":
     heading("📅 7-Day Study Planner", f"Your personalized {subject} plan for {level} level.")
     daily_topics = TOPICS[subject][level]
@@ -673,14 +673,15 @@ elif page == "Study Planner":
 
     st.markdown("### 📚 Your 7-day learning schedule")
     topic_count = len(daily_topics)
+
     for day_num in range(1, 8):
-        # Divide the selected level's topics across the seven days.
         start_index = ((day_num - 1) * topic_count + 6) // 7
         end_index = (day_num * topic_count + 6) // 7
         day_topics = daily_topics[start_index:end_index]
 
         with st.container(border=True):
             st.markdown(f"#### Day {day_num}")
+
             if day_topics:
                 for topic in day_topics:
                     st.markdown(f"- **{topic}**")
@@ -688,6 +689,7 @@ elif page == "Study Planner":
             else:
                 st.markdown("- **Weekly revision and practice**")
                 st.caption("Revise the topics from Days 1–6 and take a short self-test.")
+
             is_done = st.checkbox(
                 f"Mark Day {day_num} as complete",
                 key=planner_key(day_num, "done"),
@@ -698,7 +700,8 @@ elif page == "Study Planner":
         bool(st.session_state.get(planner_key(i, "done"), False))
         for i in range(1, 8)
     )
-st.progress(completed_days / 7)
+
+    st.progress(completed_days / 7)
 
     if completed_days == 7:
         st.success(f"You have completed {completed_days} out of 7 study days.")
