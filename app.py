@@ -653,26 +653,65 @@ elif page == "Learning Recommendations":
         st.caption(f"Recorded check-ins for this topic: {len(attempts)}")
         # -------------------- Study Planner --------------------
 elif page == "Study Planner":
-    heading("📅 7-Day Study Planner", "Check off each day after your study session.")
+    heading("📅 7-Day Study Planner", f"Your personalized {subject} plan for {level} level.")
     daily_topics = TOPICS[subject][level]
 
-    # Checklist values are restored from the user's saved learning_data on login.
+    # Prepare the saved checkbox state before rendering each widget.
     for day_num in range(1, 8):
-        st.session_state.planner_checks[planner_key(day_num, "done")] = bool(
-            st.session_state.get(planner_key(day_num, "done"), False)
-        )
-    completed_days = sum(bool(st.session_state.get(planner_key(i, "done"), False)) for i in range(1, 8))
+        check_key = planner_key(day_num, "done")
+        if check_key not in st.session_state:
+            st.session_state[check_key] = bool(
+                st.session_state.planner_checks.get(check_key, False)
+            )
 
+    completed_days = sum(
+        bool(st.session_state.get(planner_key(i, "done"), False))
+        for i in range(1, 8)
+    )
     st.progress(completed_days / 7)
-    st.caption(f"Weekly plan progress: {completed_days}/7 days.")
+    st.caption(f"Weekly plan progress: {completed_days}/7 days completed.")
+
+    st.markdown("### 📚 Your 7-day learning schedule")
+    topic_count = len(daily_topics)
     for day_num in range(1, 8):
-        st.session_state.planner_checks[planner_key(day_num, "done")] = st.session_state.get(planner_key(day_num, "done"), False)
+        # Divide the selected level's topics across the seven days.
+        start_index = ((day_num - 1) * topic_count + 6) // 7
+        end_index = (day_num * topic_count + 6) // 7
+        day_topics = daily_topics[start_index:end_index]
+
+        with st.container(border=True):
+            st.markdown(f"#### Day {day_num}")
+            if day_topics:
+                for topic in day_topics:
+                    st.markdown(f"- **{topic}**")
+                st.caption("Study the topic, review an example, and complete a short practice activity.")
+            else:
+                st.markdown("- **Weekly revision and practice**")
+                st.caption("Revise the topics from Days 1–6 and take a short self-test.")
+            is_done = st.checkbox(
+                f"Mark Day {day_num} as complete",
+                key=planner_key(day_num, "done"),
+            )
+            st.session_state.planner_checks[planner_key(day_num, "done")] = is_done
+
+    completed_days = sum(
+        bool(st.session_state.get(planner_key(i, "done"), False))
+        for i in range(1, 8)
+    )
+    st.progress(completed_days / 7)
+    st.success(f"You have completed {completed_days} out of 7 study days.") if completed_days == 7 else st.info(f"{7 - completed_days} study day(s) remaining.")
 
     st.markdown("### ⏱️ Daily study goal")
-    st.session_state.daily_goal_minutes = st.slider("Daily goal (minutes)", 10, 180, int(st.session_state.daily_goal_minutes), 5)
+    st.session_state.daily_goal_minutes = st.slider(
+        "Daily goal (minutes)", 10, 180,
+        int(st.session_state.daily_goal_minutes), 5
+    )
     today_key = date.today().isoformat()
     current_minutes = int(st.session_state.daily_logs.get(today_key, 0))
-    logged_minutes = st.number_input("Minutes studied today", min_value=0, max_value=600, value=current_minutes, step=5)
+    logged_minutes = st.number_input(
+        "Minutes studied today", min_value=0, max_value=600,
+        value=current_minutes, step=5
+    )
     if st.button("Save today's study time"):
         st.session_state.daily_logs[today_key] = int(logged_minutes)
         st.success("Today's study time saved!")
