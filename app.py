@@ -643,21 +643,30 @@ elif page == "Study Planner":
     today_key = date.today().isoformat()
     current_minutes = int(st.session_state.daily_logs.get(today_key, 0))
     logged_minutes = st.number_input("Minutes studied today", min_value=0, max_value=600, value=current_minutes, step=5)
+
     if st.button("Save today's study time"):
         st.session_state.daily_logs[today_key] = int(logged_minutes)
         st.success("Today's study time saved!")
         st.rerun()
-        st.caption(f"Current streak: {get_streak()} day(s) 🔥. Your study time is saved.")
+
+    st.caption(f"Current streak: {get_streak()} day(s) 🔥. Your study time is saved.")
+
     try:
         supabase.table("learning_progress").upsert({
             "user_id": st.session_state.user.id,
             "planner_checks": st.session_state.planner_checks,
             "daily_goal_minutes": int(st.session_state.daily_goal_minutes),
-            "daily_logs": st.session_state.daily_logs
+            "daily_logs": st.session_state.daily_logs,
+            "completed_topics": list(st.session_state.completed_topics),
+            "quiz_results": st.session_state.quiz_results,
+            "quiz_history": st.session_state.quiz_history,
+            "topic_attempts": st.session_state.topic_attempts
         }, on_conflict="user_id").execute()
 
     except Exception as e:
         st.error(f"Could not save progress: {e}")
+    
+
 
 # -------------------- Learning Resources --------------------
 elif page == "Learning Resources":
