@@ -401,11 +401,12 @@ for key, value in defaults.items():
 # -------------------- Sidebar --------------------
 with st.sidebar:
     if st.button("Logout"):
-    supabase.auth.sign_out()
-    st.session_state.user = None
-    st.session_state.pop("access_token", None)
-    st.session_state.pop("refresh_token", None)
-    st.rerun()
+        supabase.auth.sign_out()
+        st.session_state.user = None
+        st.session_state.pop("access_token", None)
+        st.session_state.pop("refresh_token", None)
+        st.rerun()
+
     st.markdown("## 🧠 LearnWise AI")
     st.caption("Your personalized learning companion")
     st.markdown("---")
