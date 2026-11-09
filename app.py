@@ -807,8 +807,7 @@ elif page == "Learning Recommendations":
         f"<div class='hero'><div class='pill'>{subject.upper()} • {level.upper()}</div><h2>Your personalized roadmap</h2><p>Goal: {goal}. Complete each topic to update your progress.</p></div>",
         unsafe_allow_html=True
     )
-
-       content = get_ai_learning_content(subject, level, goal)
+    content = get_ai_learning_content(subject, level, goal)
 
     topics = (
         content["topics"]
